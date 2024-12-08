@@ -10,19 +10,22 @@ import java.util.Map;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter; 
+import java.util.*;
+import java.io.*;
 
 class linkers {
-
+    private static CodigoCPP generador;
     // Tabla de errores
     static ArrayList<String> tabla = linkersTokenManager.tablaErrores;
     static Map<String, String> declaredVariables = new HashMap<String, String>();
+    static String acumulador_cpp = "";
 
-    // Lista para almacenar el TAC generado
-    static ArrayList<TAC> intermedia = new ArrayList<TAC>();
-    static int tempVarCounter = 0; // contador de variables temporales actuales
-    static int labelCounter = 0; // contador de etiquetas actuales
+    static ArrayList<String> casos = new ArrayList<>();
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws FileNotFoundException {
+        String archivo = "codigo_objeto";
+        generador = new CodigoCPP("./", archivo);
+
         try {
             linkers link = new linkers(System.in);
             link.Programalink();
@@ -34,23 +37,8 @@ class linkers {
                 }
             } else {
                 System.out.println("\u001B[32mAnálisis exitoso\u001B[0m");
-
-                // Generar el archivo de codigo intermedio
-                String outputFileName = "Intermedio.txt";
-                PrintWriter writer = null;
-                try {
-                    writer = new PrintWriter(new FileWriter(outputFileName));
-                    for (TAC i : intermedia) {
-                        writer.println(i);
-                    }
-                    System.out.println("\nEl codigo intermedio generado ha sido guardado en el archivo: " + outputFileName);
-                } catch (IOException e) {
-                    System.out.println("Error al escribir el codigo intermedio en el archivo: " + e.getMessage());
-                } finally {
-                    if (writer != null) {
-                        writer.close();
-                    }
-                }
+                // System.out.print(acumulador_cpp);
+                compilarEjecutable("./" + archivo + ".cpp");
             }
 
         } catch (ParseException e) {
@@ -65,83 +53,78 @@ class linkers {
             declaredVariables.put(id.image, type);
         }
     }
+    
+    static String obtenerNombreArchivo(File archivo) {
+        String nombre = archivo.getName();
+        int pos = nombre.lastIndexOf(".");
+        return pos > 0 ? nombre.substring(0, pos) : nombre;
+    }
 
-    // Clase para el objeto de representacion intermedia
-    static class TAC {
-        private String operator;
-        private String operand1;
-        private String operand2;
-        private String result;
+    static void compilarEjecutable(String sourcePath) {
+        String output = sourcePath.replace(".cpp", " ");
+        ProcessBuilder pb = new ProcessBuilder("g++", sourcePath, "-o", output);
+        try {
+            Process proceso = pb.start();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(proceso.getInputStream()));
+            BufferedReader errorReader = new BufferedReader(new InputStreamReader(proceso.getErrorStream()));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                System.out.println(line);
+            }
+            while ((line = errorReader.readLine()) !=  null) {
+                System.err.println(line);
+            }
+            int exitCode = proceso.waitFor();
+            System.out.println("GCC terminó con el código de salida: " + exitCode);
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
 
-        public TAC() { }
-
-        // Constructor para operaciones binarias (+, -, *, /)
-        public TAC(String operator, String operand1, String operand2, String result) {
-            this.operator = operator;
-            this.operand1 = operand1;
-            this.operand2 = operand2;
-            this.result = result;
+    static class CodigoCPP {
+        private File file;
+        public CodigoCPP(String path, String nombreFuente) {
+            String fullPath = path.replaceFirst("^~", System.getProperty("user.home"));
+            file = new File(fullPath + nombreFuente + ".cpp");
+            limpiarBuffer();
+            escribirCPP(
+                "#include <iostream>\n" +
+                // "#include <Windows.h>\n" +
+                "using namespace std;\n" +
+                "int main() {\n" 
+                // "\tSetConsoleOutputCP(CP_UTF8);\n"
+            );
         }
 
-        // Constructor para operaciones de Asignacion 
-        public TAC(String operator, String operand1, String result) {
-            this(operator, operand1, null,result); // Se llama al primer constructor por una operacion unaria
-        }
-
-        // Constructor para operaciones de salto o etiquetado 
-        public TAC(String operator, String result) {
-            this(operator, null, null, result); // Operaciones sin operandos
-        }
-
-        // getters
-
-        public String getOperator() {
-            return this.operator;
-        }
-
-        public String getOperand1() {
-            return this.operand1;
-        }
-
-        public String getOperand2() {
-            return this.operand2;
-        }
-
-        public String getResult() {
-            return this.result;
-        }
-
-        @Override
-        public String toString() {
-            if (this.operand2 != null) { // Es una operacion binaria
-                return this.result + " = " + this.operand1 + " " + this.operator + " " + this.operand2;
-            } else if (this.operand1 != null) { 
-                return this.result + " " + this.operator + " " + this.operand1;
-            } else { // Operaciones unarias
-                return this.operator + " " + this.result;
+        public void escribirCPP(String linea) {
+            try {
+                FileWriter writer = new FileWriter(file, true);
+                BufferedWriter BufWriter = new BufferedWriter(writer);
+                PrintWriter PrintW = new PrintWriter(BufWriter);
+                PrintW.write(linea);
+                PrintW.close();
+                BufWriter.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+                System.out.println("Error al tratar de escribir en el archivo CPP");
             }
         }
-    }
 
-    // Clase para representar el resultado de una expresión
-    static class ExpressionResult {
-        String type;
-        String place;
-
-        public ExpressionResult(String type, String place) {
-            this.type = type;
-            this.place = place;
+        public void limpiarBuffer() {
+            try {
+                FileWriter writer = new FileWriter(file, false);
+                BufferedWriter BufWriter = new BufferedWriter(writer);
+                PrintWriter PrintW = new PrintWriter(BufWriter);
+                PrintW.write("");
+                PrintW.close();
+                BufWriter.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+                System.out.println("Error al tratar de limpiar el buffer");
+            }
         }
-    }
-
-    // Procedimiento para generar variables temporales 
-    static String newTemp() {
-        return "t" + (tempVarCounter++);
-    }
-
-    // Método para generar el etiquetado
-    static String newLabel() {
-        return "L" + (labelCounter++) + " : ";
     }
 
     static class Parameter {
@@ -153,9 +136,7 @@ class linkers {
             this.name = name;
         }
 
-        public Parameter() {
-
-        }
+        public Parameter() {}
     }
 
 }
@@ -172,7 +153,7 @@ TOKEN_MGR_DECLS : {
         } else {
             errorMessage += "\"" + curChar + "\" encontrado, pero esperaba más caracteres.";
         }
-        linkers.tabla.add(errorMessage); // Corregido para apuntar a 'tabla'
+        linkers.tabla.add(errorMessage); 
     }
 }
 
@@ -182,23 +163,15 @@ TOKEN: {//PALABRAS RESERVADAS
     | <Escritura: "Escribir">
     | <CondicionalIf: "if">
     | <CondicionalElse: "else"> 
-    | <CondicionalIfthen: "ifthen">
     | <CondicionalSwitch: "Switch">
     | <CicloWhile: "While">
-    | <CicloFor: "For">
     | <Default: "Default">
     | <Caso: "Caso">
     | <Break: "Break">
     | <VERDADERO: "Verdadero">
     | <FALSO: "Falso">
-    | <PUBLICO: "Publico">
-    | <PRIVADO: "Privado">
-    | <NoRetorno: "NoRetorno">
     | <Start: "Start">
     | <End: "End">
-    | <Funcion: "Funcion">
-    | <Retorno: "Retorno">
-    | <LlamarFuncion: "call">
 }
 
 TOKEN: {// TIPOS DE DATO
@@ -227,6 +200,10 @@ TOKEN: {// OPERADORES ARITMETICOS
     | <OperacionMultiplicacion: "*">
     | <OperacionDivision: "/">
     | <OperacionResiduo: "%">
+    | <OperacionIncremento: "+=">
+    | <OperacionDecremento: "-=">
+    | <OperadorIncremento: "++">
+    | <OperadorDecremento: "--">
 }
 
 TOKEN: {// OPERADORES RELACIONALES
@@ -254,7 +231,11 @@ TOKEN: {
 }
 
 SKIP: {
-    " " | "\r" | "\t" | "\n" 
+    " " | "\t" | "\r" | "\n"
+    |
+    <"//" (~["\n", "\r"])* ("\n" | "\r" | "\r\n")>
+    |
+    <"/*" (~["*"])* ("*" ~["/"] (~["*"])* )* "*/">
 }
 
 SPECIAL_TOKEN: {
@@ -274,10 +255,15 @@ void Programalink() : {}{
 
             try{<LlaveCierra> }catch(ParseException e){tabla.add("Error de Sintaxis -> " + e.getMessage());} )
 
-            (procedimiento())*
-
-            (funcion())*
-    <EOF>
+            {
+                generador.escribirCPP(acumulador_cpp);
+                generador.escribirCPP("\tcout << \"\\nPresiona Enter para salir...\";\n");
+                generador.escribirCPP("\tcin.ignore();\n");
+                generador.escribirCPP("\tcin.get();\n");
+                generador.escribirCPP("\treturn 0;\n}");
+            }
+            
+            <EOF>
     } catch (ParseException e) {
         Token t;
         do {
@@ -294,12 +280,10 @@ void sentencias() : {} {
     | entrada()
     | salida()
     | condicionalIf()
-    | condicionalIfthen()
-    | cicloFor()
     | cicloWhile()
     | condicionalSwitch()
-    | llamadaFuncion()
-}
+} 
+
 
 void verificarExistenciaVariable(Token token) : {} {
     {
@@ -365,8 +349,9 @@ void declararVariables() : {} {
  * Este método no tiene parámetros de entrada ni valores de retorno.
  */
 void VariableINT() : {
-    Token id;
+    Token id, num;
     int line, column;
+    String codigo_temporal = "";
     boolean control = false;
 } {
     try {
@@ -376,37 +361,23 @@ void VariableINT() : {
             line = id.beginLine;
             column = id.beginColumn;
         }
-        (
+        {
+            linkers.checkAndAddVariable(id, "int", line, column);
+            codigo_temporal = "\tint " + id.image;
+        }
+        [ <Asignacion> 
             try {
-                <CorcheteAbre> {
-                    Token token = getNextToken();
-                    if (token.kind == linkersConstants.NUMERO) {
-                        control = true;
-                        linkers.checkAndAddVariable(id, "int[]", line, column);
-                        intermedia.add(new TAC("reserva", token.image, id.image));
-                    } else {
-                        tabla.add("Error Semántico -> Tamaño de arreglo inválido: " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
-                    }
-                }
-                <CorcheteCierra>
+                num = <NUMERO>
+                { codigo_temporal += " = " + num.image; }
             } catch (ParseException e) {
                 tabla.add("Error de Sintaxis -> " + e.getMessage());
             }
-        )?
-        {
-            if (!control) {
-                linkers.checkAndAddVariable(id, "int", line, column);
-            }
-        }
-        [ <Asignacion> {
-            ExpressionResult exprResult = expresion("int");
-            // Generar TAC de asignación si hay inicialización
-            String temp = linkers.newTemp();
-            intermedia.add(new TAC("=", exprResult.place, temp));
-            intermedia.add(new TAC("=", temp, id.image));
-            // intermedia.add(new TAC("=", exprResult.place, id.image));
-        } ]
+        ]
         <DelimitadorLineaDeCodigo>
+        { 
+            codigo_temporal += "; \n";
+            acumulador_cpp += codigo_temporal;
+         }
     } catch (ParseException e) {
         Token t;
         do {
@@ -428,8 +399,9 @@ void VariableINT() : {
  * - in * - boolean control: Una bandera de control utilizada para procesamiento o validación adicional.
  */
 void VariableFLOAT() : {
-    Token id;
+    Token id, num;
     int line, column;
+    String codigo_temporal = "";
     boolean control = false;
 } {
     try {
@@ -439,37 +411,24 @@ void VariableFLOAT() : {
             line = id.beginLine;
             column = id.beginColumn;
         }
-        (
+        {
+            linkers.checkAndAddVariable(id, "float", line, column);
+            codigo_temporal = "\tfloat " + id.image;
+        }
+        [ <Asignacion>
             try {
-                <CorcheteAbre> {
-                    Token token = getNextToken();
-                    if (token.kind == linkersConstants.NUMERO) {
-                        control = true;
-                        linkers.checkAndAddVariable(id, "float[]", line, column);
-                        intermedia.add(new TAC("reserva", token.image, id.image));
-                    } else {
-                        tabla.add("Error Semántico -> Tamaño de arreglo inválido: " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
-                    }
-                }
-                <CorcheteCierra>
+                num = <NUMERO_FLOTANTE>
+                { codigo_temporal += " = " + num.image; }
             } catch (ParseException e) {
                 tabla.add("Error de Sintaxis -> " + e.getMessage());
             }
-        )?
-        {
-            if (!control) {
-                linkers.checkAndAddVariable(id, "float", line, column);
-            }
-        }
-        [ <Asignacion> {
-            ExpressionResult exprResult = expresion("float");
-            // Generar tac de asignación si hay inicialización
-            String temp = linkers.newTemp();
-            intermedia.add(new TAC("=", exprResult.place, temp));
-            intermedia.add(new TAC("=", temp, id.image));
-            // intermedia.add(new TAC("=", exprResult.place, id.image));
-        } ]
+        ]
         <DelimitadorLineaDeCodigo>
+        { 
+            codigo_temporal += "; \n"; 
+            acumulador_cpp += codigo_temporal;
+        }
+
     } catch (ParseException e) {
         Token t;
         do {
@@ -492,8 +451,9 @@ void VariableFLOAT() : {
  * procesar y validar las declaraciones de variables de tipo BOOLEAN en el código fuente.
  */
 void VariableBOOLEAN() : {
-    Token id;
+    Token id, val = null;
     int line, column;
+    String codigo_temporal;
     boolean control = false;
 } {
     try {
@@ -503,37 +463,25 @@ void VariableBOOLEAN() : {
             line = id.beginLine;
             column = id.beginColumn;
         }
-        (
+        {
+            linkers.checkAndAddVariable(id, "boolean", line, column);
+            codigo_temporal = "\tbool " + id.image;
+        }
+        [ <Asignacion>
             try {
-                <CorcheteAbre> {
-                    Token token = getNextToken();
-                    if (token.kind == linkersConstants.NUMERO) {
-                        control = true;
-                        linkers.checkAndAddVariable(id, "boolean[]", line, column);
-                        intermedia.add(new TAC("reserva", token.image, id.image));
-                    } else {
-                        tabla.add("Error Semántico -> Tamaño de arreglo inválido: " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
-                    }
-                }
-                <CorcheteCierra>
+                val = <VERDADERO> | <FALSO>
             } catch (ParseException e) {
                 tabla.add("Error de Sintaxis -> " + e.getMessage());
-            }
-        )?
+            }            
+        ]
         {
-            if (!control) {
-                linkers.checkAndAddVariable(id, "boolean", line, column);
-            }
+            codigo_temporal += " = " + (val.image.equals("Verdadero") ? "true" : "false");
         }
-        [ <Asignacion> {
-            ExpressionResult exprResult = expresion("boolean");
-            // Generar tac de asignación si hay inicialización
-            String temp = linkers.newTemp();
-            intermedia.add(new TAC("=", exprResult.place, temp));
-            intermedia.add(new TAC("=", temp, id.image));
-            // intermedia.add(new TAC("=", exprResult.place, id.image));
-        } ]
         <DelimitadorLineaDeCodigo>
+        {
+            codigo_temporal += "; \n";
+            acumulador_cpp += codigo_temporal;
+        }
     } catch (ParseException e) {
         Token t;
         do {
@@ -544,9 +492,10 @@ void VariableBOOLEAN() : {
 }
 
 void VariableCADENA() : {
-    Token id;
+    Token id, value;
     int line, column;
     boolean control = false;
+    String codigo_temporal;
 } {
     try {
         <TipoDatoCadena>
@@ -555,37 +504,25 @@ void VariableCADENA() : {
             line = id.beginLine;
             column = id.beginColumn;
         }
-        (
+        {
+            linkers.checkAndAddVariable(id, "string", line, column);
+            codigo_temporal = "\nstring " + id.image;
+        }
+        [ <Asignacion>
             try {
-                <CorcheteAbre> {
-                    Token token = getNextToken();
-                    if (token.kind == linkersConstants.NUMERO) {
-                        control = true;
-                        linkers.checkAndAddVariable(id, "string[]", line, column);
-                        intermedia.add(new TAC("reserva", token.image, id.image));
-                    } else {
-                        tabla.add("Error Semántico -> Tamaño de arreglo inválido: " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
-                    }
+                value = <CADENA>
+                {
+                    codigo_temporal += " = " + value.image;
                 }
-                <CorcheteCierra>
             } catch (ParseException e) {
                 tabla.add("Error de Sintaxis -> " + e.getMessage());
             }
-        )?
-        {
-            if (!control) {
-                linkers.checkAndAddVariable(id, "string", line, column);
-            }
-        }
-        [ <Asignacion> {
-            ExpressionResult exprResult = expresion("string");
-            // Generar TAC de asignación si hay inicialización
-            String temp = linkers.newTemp();
-            intermedia.add(new TAC("=", exprResult.place, temp));
-            intermedia.add(new TAC("=", temp, id.image));
-            // intermedia.add(new TAC("=", exprResult.place, id.image));
-        } ]
+        ]
         <DelimitadorLineaDeCodigo>
+        {
+            codigo_temporal += "; \n";
+            acumulador_cpp += codigo_temporal;
+        }
     } catch (ParseException e) {
         Token t;
         do {
@@ -596,9 +533,10 @@ void VariableCADENA() : {
 }
 
 void VariableCARACTER() : {
-    Token id;
+    Token id, value;
     int line, column;
     boolean control = false;
+    String codigo_temporal;
 } {
     try {
         <TIpoDatoCaracter>
@@ -607,37 +545,25 @@ void VariableCARACTER() : {
             line = id.beginLine;
             column = id.beginColumn;
         }
-        (
+        {
+            linkers.checkAndAddVariable(id, "char", line, column);
+            codigo_temporal = "\tchar" + id.image;
+        }
+        [ <Asignacion>
             try {
-                <CorcheteAbre> {
-                    Token token = getNextToken();
-                    if (token.kind == linkersConstants.NUMERO) {
-                        control = true;
-                        linkers.checkAndAddVariable(id, "char[]", line, column);
-                        intermedia.add(new TAC("reserva", token.image, id.image));
-                    } else {
-                        tabla.add("Error Semántico -> Tamaño de arreglo inválido: " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
-                    }
+                value = <LETRA>
+                {
+                    codigo_temporal += " = " + value.image;
                 }
-                <CorcheteCierra>
             } catch (ParseException e) {
                 tabla.add("Error de Sintaxis -> " + e.getMessage());
             }
-        )?
-        {
-            if (!control) {
-                linkers.checkAndAddVariable(id, "char", line, column);
-            }
-        }
-        [ <Asignacion> {
-            ExpressionResult exprResult = expresion("char");
-            // Generar tac de asignación si hay inicialización
-            String temp = linkers.newTemp();
-            intermedia.add(new TAC("=", exprResult.place, temp));
-            intermedia.add(new TAC("=", temp, id.image));
-            // intermedia.add(new TAC("=", exprResult.place, id.image));
-        } ]
+        ]
         <DelimitadorLineaDeCodigo>
+        {
+            codigo_temporal += "; \n";
+            acumulador_cpp += codigo_temporal;
+        }
     } catch (ParseException e) {
         Token t;
         do {
@@ -653,19 +579,19 @@ void VariableCARACTER() : {
  * Variables locales:
  * - `id`: Un token que representa el identificador de la variable a la que se le asignará un valor.
  * - `varType`: Una cadena que almacena el tipo de la variable. Inicialmente está vacía.
- * - `exprResult`: Un objeto de tipo `ExpressionResult` que almacena el resultado de la expresión que se asignará a la variable.
  * 
  * La implementación de este método debe definir cómo se realiza la asignación de valores a las variables,
  * incluyendo la verificación de tipos y la evaluación de la expresión.
  */
 void asignacion() : {
     Token id;
-    String varType = "";
-    ExpressionResult exprResult;
+    String varType = ""; 
+    String expr = "";    
 } {
     try {
         id = <IDENTIFICADOR>
         {
+            // Verificar que la variable esté declarada
             if (!linkers.declaredVariables.containsKey(id.image)) {
                 linkers.tabla.add("Error Semántico -> Variable no declarada: " + id.image + " en línea " + id.beginLine + ", columna " + id.beginColumn);
             } else {
@@ -674,27 +600,28 @@ void asignacion() : {
         }
         <Asignacion>
         {
-            exprResult = expresion(varType);
-            if (!exprResult.type.equals(varType)) {
-                linkers.tabla.add("Error Semántico -> Tipo incorrecto en la operación. Se esperaba: " + varType + " pero se obtuvo: " + exprResult.type + " en línea " + id.beginLine + ", columna " + id.beginColumn);
-            }
-            // Generar TAC de asignación
-            String temp = linkers.newTemp();
-            intermedia.add(new TAC("=", exprResult.place, temp));
-            intermedia.add(new TAC("=", temp, id.image));
-            // intermedia.add(new TAC("=", exprResult.place, id.image));
+            // Generar la expresión
+            expr = expresion(varType);
         }
         <DelimitadorLineaDeCodigo>
+        {
+            // Agregar la traducción al acumulador
+            String codigo_temporal = id.image + " = " + expr + ";\n";
+            acumulador_cpp += "\t" + codigo_temporal;
+        }
     } catch (ParseException e) {
         Token t;
         do {
             t = getNextToken();
         } while (t.kind != DelimitadorLineaDeCodigo && t.kind != EOF);
-        tabla.add("Error de Sintaxis -> " + e.getMessage());
+        linkers.tabla.add("Error de Sintaxis -> " + e.getMessage());
     }
 }
 
-void entrada() : {} {
+
+void entrada() : {
+    Token token;
+} {
     try {
         <Lectura>
         try {
@@ -715,12 +642,34 @@ void entrada() : {} {
              * - `Token token`: La variable `token` almacena el token consumido, que puede ser utilizado 
              *   posteriormente en el análisis sintáctico o semántico.
              */
-            Token token = jj_consume_token(linkersConstants.IDENTIFICADOR);
+            token = jj_consume_token(linkersConstants.IDENTIFICADOR);
             if (!linkers.declaredVariables.containsKey(token.image)) {
                 linkers.tabla.add("Error Semántico en entrada-> Variable no declarada: " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
             } else {
-                // Generar TAC de lectura
-                intermedia.add(new TAC("Leer", token.image));
+                String varType = linkers.declaredVariables.get(token.image);
+                String codigo_temporal = "";
+
+                switch (varType) {
+                    case "int":
+                        codigo_temporal = "\tcin >> " + token.image + "; \n";
+                        break;
+                    case "float":
+                        codigo_temporal = "\tcin >> " + token.image + "; \n";
+                        break;
+                    case "boolean":
+                        codigo_temporal = "\tcin >> " + token.image + "; \n";
+                        break;
+                    case "string":
+                        codigo_temporal = "\tcin >> " + token.image + "; \n";
+                        break;
+                    case "character":
+                        codigo_temporal = "\tcin >> " + token.image + "; \n";
+                        break;
+                    default:
+                        linkers.tabla.add("Error Semántico en entrada -> Tipo de variable no soportado: " + varType + " para la variable " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
+                }
+
+                acumulador_cpp += codigo_temporal;
             }
         }
         try {
@@ -746,16 +695,15 @@ void entrada() : {} {
  * El método `salida` es un método que no recibe parámetros y devuelve un valor de tipo `void`.
  * 
  * Dentro del bloque de inicialización del método, se declaran dos variables locales:
- * - `res` de tipo `ExpressionResult`.
- * - `temporal` de tipo `TAC`, que se inicializa con una nueva instancia de `TAC`.
+ * - `res` 
  * 
  * El método `salida` no tiene un cuerpo de implementación definido en el código proporcionado,
  * lo que sugiere que podría estar incompleto o que su funcionalidad se define en otra parte.
  * 
  */
 void salida() : {
-    ExpressionResult res;
-    TAC temporal = new TAC();
+    Token token;
+    String codigo_temporal = "\tcout << ";
 } {
     try {
         <Escritura>
@@ -766,59 +714,43 @@ void salida() : {
         }
 
         {
-            Token token = getToken(1);
-            String temp = "";
-            boolean isConcatenation = false;
+            token = getToken(1);
 
-            // Si unicamente tenemos una cadena, se mostrara directamente 
             if (token.kind == linkersConstants.CADENA) {
-                jj_consume_token(linkersConstants.CADENA);
-                temp = newTemp();
-                temporal = new TAC("Escribir", token.image);
+                token = jj_consume_token(linkersConstants.CADENA);
+                codigo_temporal += token.image;
             } else if (token.kind == linkersConstants.IDENTIFICADOR) {
-                // Si es un identificador, verificamos que exista y obtenemos su tipo
+                token = jj_consume_token(linkersConstants.IDENTIFICADOR);
                 String type = linkers.verificarExistenciaYObtenerTipo(token);
                 if (!type.equals("error")) {
-                    temp = newTemp();
-                    temporal = new TAC("Escribir", token.image);
+                    codigo_temporal += token.image;
                 }
             } else {
                 tabla.add("Error Semántico -> Tipo incorrecto en operación de escritura. Se esperaba: Cadena o Identificador");
             }
 
-            int cont = 0;
-            String temp2 = "";
             while (nextTokenIs(linkersConstants.OperacionSuma)) {
-                isConcatenation = true;
-                if (cont == 0) {
-                    intermedia.add(new TAC("=", temporal.getResult(), temp));
-                } 
                 jj_consume_token(linkersConstants.OperacionSuma);
                 token = getToken(1);
-                temp = (cont != 0) ? temp2: temp;
-                temp2 = newTemp();
+                codigo_temporal += " << ";
                 if (token.kind == linkersConstants.CADENA) {
-                    jj_consume_token(linkersConstants.CADENA);
-                    intermedia.add(new TAC("+", temp, token.image, temp2));
+                    token = jj_consume_token(linkersConstants.CADENA);
+                    codigo_temporal += token.image;
                 } else if (token.kind == linkersConstants.IDENTIFICADOR) {
-                    jj_consume_token(linkersConstants.IDENTIFICADOR);
+                    token = jj_consume_token(linkersConstants.IDENTIFICADOR);
                     if (!linkers.declaredVariables.containsKey(token.image)) {
                         tabla.add("Error Semántico -> Variable no declarada: " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
                     } else {
-                        intermedia.add(new TAC("+", temp, token.image, temp2));
+                        codigo_temporal += token.image;
                     }
                 } else {
                     tabla.add("Error Semántico -> Tipo incorrecto en operación de escritura. Se esperaba: Cadena o Identificador" + " en línea " + token.beginLine + ", columna " + token.beginColumn);
                     jj_consume_token(token.kind);
                 }
-                cont += 1;
-            }   
-
-            if (isConcatenation) {
-                intermedia.add(new TAC("Escribir", temp2));
-            } else {
-                intermedia.add(temporal);
             }
+            
+            codigo_temporal += " << endl; \n";
+            acumulador_cpp += codigo_temporal;
         }
         try {
             <ParentesisCierra>
@@ -839,218 +771,162 @@ void salida() : {
     }
 }
 
-void condicionalIf() : {
-    String condFalseLabel;
-    String endLabel;
-    ExpressionResult condResult;
-} {
+void condicionalIf() : {} {
     try {
-        <CondicionalIf>
-        try {
-            <ParentesisAbre>
-        } catch (ParseException e) {
-            tabla.add("Error de Sintaxis -> " + e.getMessage());
-        }
-        { 
-            condResult = condicion(); 
-            intermedia.add(new TAC("if", "t" + (tempVarCounter - 1) + " goto" + " L" + labelCounter));
-        }
-        try {
-            <ParentesisCierra>
-        } catch (ParseException e) {
-            tabla.add("Error de Sintaxis -> " + e.getMessage());
-        }
-
         {
-            condFalseLabel = linkers.newLabel();
-            endLabel = linkers.newLabel(); 
-            // Generar salto condicional hacia else o fin
-            intermedia.add(new TAC("ifFalse", condResult.place, condFalseLabel));
+            if(!casos.isEmpty()){
+                casos.clear();
+            }
+            acumulador_cpp += "\tif (";
         }
-        try {
-            <LlaveAbre>
-        } catch (ParseException e) {
-            tabla.add("Error de Sintaxis -> " + e.getMessage());
-        }
-        (sentencias())*
-        try {
-            <LlaveCierra>
-        } catch (ParseException e) {
-            tabla.add("Error de Sintaxis -> " + e.getMessage());
-        }
-        {
-            // Generar salto al fin después del bloque if
-            intermedia.add(new TAC("goto", endLabel));
-            // Etiqueta para el bloque else
-            intermedia.add(new TAC("label", condFalseLabel));
-        }
-        // Manejar opcionalmente el bloque else
-        (condicionalElseBlock())
-        {
-            // Etiqueta para el fin del bloque if-else
-            intermedia.add(new TAC(endLabel, ""));
-        }
-    } catch (ParseException e) {
-        tabla.add("Error de Sintaxis -> " + e.getMessage());
-    }
-}
-
-// Método auxiliar para manejar el bloque else opcional
-void condicionalElseBlock() : {} {
-    try {
+        parteIf()
         (
-            // Intentar consumir 'else'
-            try {
-                <CondicionalElse>
-            } catch (ParseException e) {
-                // No hay bloque else, regresar
-                return;
-            }
-            try {
-                <LlaveAbre>
-            } catch (ParseException e) {
-                tabla.add("Error de Sintaxis -> " + e.getMessage());
-            }
-            (sentencias())*
-            try {
-                <LlaveCierra>
-            } catch (ParseException e) {
-                tabla.add("Error de Sintaxis -> " + e.getMessage());
-            }
-        )
+            LOOKAHEAD(2) parteElseIf()
+        )*
+        (LOOKAHEAD(2) parteElse())?
+        
     } catch (ParseException e) {
         tabla.add("Error de Sintaxis -> " + e.getMessage());
     }
 }
 
-void condicionalIfthen() : {
-    String condFalseLabel;
-    ExpressionResult condResult;
-} {
-    // Este método puede ser eliminado si no se utiliza o ajustado según las necesidades
-    try {
-        <CondicionalIfthen>
+void parteIf() : {} {
+    <CondicionalIf>
         try {
             <ParentesisAbre>
         } catch (ParseException e) {
             tabla.add("Error de Sintaxis -> " + e.getMessage());
-        }
-        { condResult = condicion(); }
-        try {
-            <ParentesisCierra>
-        } catch (ParseException e) {
-            tabla.add("Error de Sintaxis -> " + e.getMessage());
-        }
-        {
-            condFalseLabel = linkers.newLabel();
-            // Generar salto condicional
-            intermedia.add(new TAC("ifFalse", condResult.place, condFalseLabel));
-        }
-        try {
-            <LlaveAbre>
-        } catch (ParseException e) {
-            tabla.add("Error de Sintaxis -> " + e.getMessage());
-        }
-        (sentencias())*
-        try {
-            <LlaveCierra>
-        } catch (ParseException e) {
-            tabla.add("Error de Sintaxis -> " + e.getMessage());
-        }
-        {
-            // Añadir etiqueta para el fin del bloque ifthen
-            intermedia.add(new TAC("label", condFalseLabel));
-        }
-    } catch (ParseException e) {
-        tabla.add("Error de Sintaxis -> " + e.getMessage());
-    }
-}
-
-
-
-void cicloFor() : {
-    String startLabel, endLabel;
-    ExpressionResult condResult;
-} {
-    try {
-        <CicloFor>
-        try {
-            <ParentesisAbre>
-        } catch (ParseException e) {
-            tabla.add("Error de Sintaxis -> " + e.getMessage());
-        }
-
-        (declararVariables() | asignacion())
-        {
-            startLabel = linkers.newLabel();
-            intermedia.add(new TAC("label", startLabel));
-        }
-        { condResult = condicion(); }
-        {
-            endLabel = linkers.newLabel();
-            // Generar salto condicional
-            intermedia.add(new TAC("ifFalse", condResult.place, endLabel));
-        }
-        try {
-            <DelimitadorLineaDeCodigo>
-        } catch (ParseException e) {
-            tabla.add("Error de Sintaxis -> " + e.getMessage());
-        }
-
-        { asignacion(); }
+        } 
+        condicion()
         try {
             <ParentesisCierra>
         } catch (ParseException e) {
             tabla.add("Error de Sintaxis -> " + e.getMessage());
         }
         try {
-            <LlaveAbre>
+            <LlaveAbre> {
+            }
+        } catch (ParseException e) {
+            tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }{
+            acumulador_cpp += ") { \n\t";
+        }
+        (sentencias())*
+        try {
+            <LlaveCierra>{
+                acumulador_cpp += "\t} \n";
+            }
+        } catch (ParseException e) {
+            tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+}
+
+
+void parteElseIf() : {
+    Token id;
+} {
+    try{
+        <CondicionalElse>
+        {
+            acumulador_cpp += "else ";
+        }
+        
+        [
+            <CondicionalIf>
+                try {
+                    <ParentesisAbre>
+                } catch (ParseException e) {
+                    tabla.add("Error de Sintaxis -> " + e.getMessage());
+                }
+                {
+                    acumulador_cpp += "if (";
+                }
+                condicion()
+
+                try {
+                    <ParentesisCierra>
+                } catch (ParseException e) {
+                    tabla.add("Error de Sintaxis -> " + e.getMessage());
+                }
+                { 
+                    acumulador_cpp += ")";
+                }
+        ]
+        try {
+            <LlaveAbre> {
+                acumulador_cpp += " { \n";
+            }
+        } catch (ParseException e) {
+            tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        (sentencias())*
+        try {
+            <LlaveCierra>
+            {
+                acumulador_cpp += "\t} \n";
+            }
         } catch (ParseException e) {
             tabla.add("Error de Sintaxis -> " + e.getMessage());
         }
 
-        (sentencias())*
-        {
-            // Salto al inicio del ciclo
-            intermedia.add(new TAC("goto", startLabel));
-            // Etiqueta de fin del ciclo
-            intermedia.add(new TAC("label", endLabel));
-        }
-        try {
-            <LlaveCierra>
-        } catch (ParseException e) {
-            tabla.add("Error de Sintaxis -> " + e.getMessage());
-        }
-    } catch (ParseException e) {
+    }catch (ParseException e) {
         tabla.add("Error de Sintaxis -> " + e.getMessage());
     }
 }
 
-void cicloWhile() : {
-    String startLabel, endLabel;
-    ExpressionResult condResult;
-} {
+void parteElse() : {
+    String startLabel = "";
+}
+{
+    try{
+        try{
+            <CondicionalElse> {
+                acumulador_cpp += " else";
+            }
+        }catch (ParseException e){
+            tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+
+        try {
+            <LlaveAbre> {
+                acumulador_cpp += " {";
+            }
+        } catch (ParseException e) {
+            tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        (sentencias())*
+        try {
+            <LlaveCierra>{
+                acumulador_cpp += "\t} \n";
+            }
+        } catch (ParseException e) {
+            tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+
+    }catch (ParseException e ){
+        tabla.add("Error de Sintaxis -> " + e.getMessage());
+    }
+}
+
+void cicloWhile() : { } {
     try {
         <CicloWhile>
         {
-            startLabel = linkers.newLabel();
-            intermedia.add(new TAC("label", startLabel));
+            acumulador_cpp += "while (";
         }
         try {
             <ParentesisAbre>
         } catch (ParseException e) {
             tabla.add("Error de Sintaxis -> " + e.getMessage());
         }
-        { condResult = condicion(); }
-        {
-            endLabel = linkers.newLabel();
-            // Generar salto condicional
-            intermedia.add(new TAC("ifFalse", condResult.place, endLabel));
-        }
+        condicion()
         try {
             <ParentesisCierra>
         } catch (ParseException e) {
             tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        {
+            acumulador_cpp += ") {\n";
         }
         try {
             <LlaveAbre>
@@ -1059,15 +935,14 @@ void cicloWhile() : {
         }
         (sentencias())*
         {
-            // Salto al inicio del ciclo
-            intermedia.add(new TAC("goto", startLabel));
-            // Etiqueta de fin del ciclo
-            intermedia.add(new TAC("label", endLabel));
         }
         try {
             <LlaveCierra>
         } catch (ParseException e) {
             tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        {
+            acumulador_cpp += "}\n";
         }
     } catch (ParseException e) {
         tabla.add("Error de Sintaxis -> " + e.getMessage());
@@ -1076,19 +951,36 @@ void cicloWhile() : {
 
 void condicionalSwitch() : {
     Token id;
-    ExpressionResult exprResult;
+    Token num;
 } {
     try {
         <CondicionalSwitch>
-        <ParentesisAbre>
+        {
+            acumulador_cpp += "\tswitch (";
+        }
+        try {
+            <ParentesisAbre>
+        } catch (ParseException e) {
+            linkers.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
         id = <IDENTIFICADOR>
-        <ParentesisCierra>
+        {
+            if (!casos.isEmpty()){
+                casos.clear();
+            }
+            acumulador_cpp += id.image + ") {\n";
+        }
+        try {
+            <ParentesisCierra>
+        } catch (ParseException e) {
+            linkers.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
         <LlaveAbre>
         {
             if (!linkers.declaredVariables.containsKey(id.image)) {
                 linkers.tabla.add("Error Semántico -> Variable no declarada: " + id.image + " en línea " + id.beginLine + ", columna " + id.beginColumn);
             }
-        }
+        } 
         (
             caso()
         )*
@@ -1096,6 +988,9 @@ void condicionalSwitch() : {
             defaultCaso()
         )?
         <LlaveCierra>
+        {
+            acumulador_cpp += "}\n";
+        }
     } catch (ParseException e) {
         Token t;
         do {
@@ -1112,271 +1007,67 @@ void caso() : {
     caseValue = <NUMERO>
     <DelimitadorCasoSwitch>
     {
-        id = getToken(1);
-        String label = linkers.newLabel();
-        intermedia.add(new TAC("label", label));
-        intermedia.add(new TAC("if", id.image + " == " + caseValue.image, "goto " + label));
+        acumulador_cpp += "\tcase " + caseValue.image + ":\n";
     }
     (
         sentencias()
-    )*
+    )*{
+    }
     <Break>
+    {
+        acumulador_cpp += "\tbreak;\n";
+    }
     <DelimitadorLineaDeCodigo>
 }
 
 void defaultCaso() : {
-    String label = linkers.newLabel();
 } {
     <Default>
     <DelimitadorCasoSwitch>
     {
-        intermedia.add(new TAC("label", label));
+        acumulador_cpp += "\tdefault: \n";
     }
     (
         sentencias()
     )*
 }
 
-void procedimiento() : {
-    Token id;
-    String startLabel, endLabel;
-    ArrayList<Parameter> parameters = new ArrayList<>();
 
-} {
-    try {
-        <NoRetorno>
-        id = <IDENTIFICADOR>
-        <ParentesisAbre>
-        {
-            parameters = listaParametros();
-        }
-        <ParentesisCierra>
-        <Start>
-        {
-            startLabel = linkers.newLabel();
-            endLabel = linkers.newLabel();
-            intermedia.add(new TAC("label", startLabel)); // Etiqueta de inicio del procedimiento
-            // Agregar los parámetros a la tabla de variables declaradas
-            for (Parameter param : parameters) {
-                linkers.declaredVariables.put(param.name, param.type);
-            }
-        }
-        (sentencias())+
-        {
-            intermedia.add(new TAC("goto", endLabel)); // Salto al final del procedimiento
-            intermedia.add(new TAC("", endLabel)); // Etiqueta de fin del procedimiento
-        }
-        <End>
-    } catch (ParseException e) {
-        Token t;
-        do {
-            t = getNextToken();
-        } while (t.kind != linkersConstants.LlaveCierra && t.kind != EOF);
-        tabla.add("Error de Sintaxis -> " + e.getMessage());
-    }
-}
-
-ArrayList<Parameter> listaParametros() : {
-    ArrayList<Parameter> parameters = new ArrayList<>();
-    Parameter param;
-} {
-    (
-        param = parametro()
-        {
-            parameters.add(param);
-        }
-        (
-            <Coma>
-            param = parametro()
-            {
-                parameters.add(param);
-            }
-        )*
-    )?
-    { return parameters; }
-}
-
-Parameter parametro() : {
-    Token id;
-    String type;
-} {
-    (
-        <TipoDatoEntero> { type = "int"; }
-        | <TipoDatoDecimal> { type = "float"; }
-        | <TipoDatoBooleano> { type = "boolean"; }
-        | <TipoDatoCadena> { type = "string"; }
-        | <TIpoDatoCaracter> { type = "char"; }
-    )
-    id = <IDENTIFICADOR>
-    
-    { return new Parameter(id.image, type); }
-}
-
-void funcion() : {
-    Token id;
-    String startLabel, endLabel;
-    ArrayList<Parameter> parameters = new ArrayList<>();
-    String returnType = "";
-} {
-    try {
-        (<PUBLICO> | <PRIVADO>)
-        (
-            <TipoDatoEntero> { returnType = "int"; }
-            | <TipoDatoDecimal> { returnType = "float"; }
-            | <TipoDatoCadena> { returnType = "string"; }
-            | <TIpoDatoCaracter> { returnType = "char"; }
-        )
-        id = <IDENTIFICADOR>
-        <ParentesisAbre>
-        {
-            parameters = listaParametros();
-        }
-        <ParentesisCierra>
-        <Start>
-        {
-            startLabel = linkers.newLabel();
-            endLabel = linkers.newLabel();
-            intermedia.add(new TAC("label", startLabel)); // Etiqueta de inicio de la función
-            // Agregar los parámetros a la tabla de variables declaradas
-            for (Parameter param : parameters) {
-                linkers.declaredVariables.put(param.name, param.type);
-            }
-        }
-        (sentencias())*
-        (retorno(returnType))?
-        {
-            intermedia.add(new TAC("goto", endLabel)); // Salto al final de la función
-            intermedia.add(new TAC("label", endLabel)); // Etiqueta de fin de la función
-        }
-        <End>
-    } catch (ParseException e) {
-        Token t;
-        do {
-            t = getNextToken();
-        } while (t.kind != linkersConstants.LlaveCierra && t.kind != EOF);
-        tabla.add("Error de Sintaxis -> " + e.getMessage());
-    }
-}
-
-void retorno(String returnType) : {
-    ExpressionResult exprResult;
-} {
-    try {
-        <Retorno>
-        {
-            exprResult = expresion(returnType);
-            if (!exprResult.type.equals(returnType)) {
-                tabla.add("Error Semántico -> Tipo de retorno incorrecto. Se esperaba: " + returnType + " pero se obtuvo: " + exprResult.type);
-            }
-            // Generar TAC de retorno
-            intermedia.add(new TAC("return", exprResult.place));
-        }
-        <DelimitadorLineaDeCodigo>
-    } catch (ParseException e) {
-        Token t;
-        do {
-            t = getNextToken();
-        } while (t.kind != DelimitadorLineaDeCodigo && t.kind != EOF);
-        tabla.add("Error de Sintaxis -> " + e.getMessage());
-    }
-}
-
-ExpressionResult llamadaFuncion() : {
-    Token id;
-    ArrayList<ExpressionResult> argumentos = new ArrayList<>();
-    String funcName;
-    String returnType = "";
-} {
-    try {
-        <LlamarFuncion>
-        id = <IDENTIFICADOR>
-        <ParentesisAbre>
-        {
-            funcName = id.image;
-            if (!linkers.declaredVariables.containsKey(funcName)) {
-                linkers.tabla.add("Error Semántico -> Función no declarada: " + funcName + " en línea " + id.beginLine + ", columna " + id.beginColumn);
-            } else {
-                returnType = linkers.declaredVariables.get(funcName);
-            }
-        }  
-        (argumentos = listaArgumentos())
-    <ParentesisCierra>
+void condicion() : {} {
     {
-        // Generar TAC para la llamada a la función
-        String temp = linkers.newTemp();
-        intermedia.add(new TAC("call", funcName, temp));
-        for (ExpressionResult arg : argumentos) {
-            intermedia.add(new TAC("param", arg.place));
-        }
-        return new ExpressionResult(returnType, temp);
+        acumulador_cpp += "(";
     }
-    <DelimitadorLineaDeCodigo>
-    } catch (ParseException e) {
-        Token t;
-        do {
-            t = getNextToken();
-        } while (t.kind != DelimitadorLineaDeCodigo && t.kind != EOF);
-        tabla.add("Error de Sintaxis -> " + e.getMessage());
-    }
-}
-
-ArrayList<ExpressionResult> listaArgumentos() : {
-    ArrayList<ExpressionResult> argumentos = new ArrayList<>();
-    ExpressionResult arg;
-} {
-        arg = expresion("any")
-        {
-            argumentos.add(arg);
-        }
-        (
-            <Coma>
-            arg = expresion("any")
-            {
-                argumentos.add(arg);
-            }
-        )*
-
-    { return argumentos; }
-}
-
-ExpressionResult condicion() : {
-    ExpressionResult left, right;
-    String op;
-} {
-    left = condicionSimple()
+    condicionSimple()
     (
-        { if (nextTokenIsOperatorLogico()) { // Verificamos si viene un operador lógico
-            op = operadorLogico();
-            right = condicionSimple();
-            String temp = linkers.newTemp();
-            intermedia.add(new TAC(op, left.place, right.place, temp));
-            left = new ExpressionResult("boolean", temp);
-        }}
-    ) // Eliminamos el * o + ya que no queremos repeticiones vacías
-    { return left; }
+        operadorLogico()
+        {
+            acumulador_cpp += " " + token.image + "";
+        }
+        condicionSimple()
+    )*
+    {  
+        acumulador_cpp += ")";
+    }
 }
 
-ExpressionResult condicionSimple() : {
+void condicionSimple() : {
     Token token1, token2;
     String type1 = "", type2 = "";
-    String op;
-    ExpressionResult left, right;
 } {
     {
-        left = valor("any"); // Permitir cualquier tipo
-        op = operadorRelacional();
-        right = valor("any"); // Permitir cualquier tipo
+        token1 = valor(); // Permitir cualquier tipo
+        type1 = verificarExistenciaYObtenerTipo(token1);
+        
+        operadorRelacional();
+        acumulador_cpp += " " + token.image + " ";
+        
+        token2 = valor(); // Permitir cualquier tipo
+        type2 = verificarExistenciaYObtenerTipo(token2);
 
         // Verificar que ambos operandos sean del mismo tipo o tipos compatibles
-        if (!left.type.equals(right.type) && !left.type.equals("error") && !right.type.equals("error")) {
-            tabla.add("Error Semántico en condición-> Tipos incompatibles en la condición: " + left.type + " y " + right.type);
+        if (!type2.equals(type2) && !type1.equals("error") && !type2.equals("error")) {
+            tabla.add("Error Semántico en condición-> Tipos incompatibles en la condición: " + type1 + " y " + type2);
         }
-
-        // Generar una variable temporal para el resultado booleano
-        String temp = linkers.newTemp();
-        intermedia.add(new TAC(op, left.place, right.place, temp));
-
-        return new ExpressionResult("boolean", temp);
     }
 }
 
@@ -1421,131 +1112,93 @@ String operadorAritmetico() : {
     { return opStr; }
 }
 
-ExpressionResult expresion(String expectedType) : {
-    ExpressionResult left, right;
-    String op;
+String expresion(String expectedType) : {
+    String type = expectedType;
+    String expr = "";
 } {
-    left = termino(expectedType)
+    expr = termino(expectedType)
     (
-        { if (nextTokenIsOperadorAritmetico()) {
-            op = operadorAritmetico();
-            right = termino(expectedType);
+        operadorAritmetico()
+        {
+            Token op = token;
+            String sigTerm = termino(expectedType);
+            expr += " " + op.image + " " + sigTerm;
+        }
+    )*
+    { return expr; }
+}
 
-            // Verificar si la operación es válida según el tipo esperado
-            if (op.equals("+") && (left.type.equals("string") || right.type.equals("string"))) {
-                // Si es concatenación y alguno es cadena, convertimos ambos operandos a cadena
-                if (!left.type.equals("string")) {
-                    String tempLeft = linkers.newTemp();
-                    intermedia.add(new TAC("toString", left.place, tempLeft));
-                    left = new ExpressionResult("string", tempLeft);
-                }
-                if (!right.type.equals("string")) {
-                    String tempRight = linkers.newTemp();
-                    intermedia.add(new TAC("toString", right.place, tempRight));
-                    right = new ExpressionResult("string", tempRight);
-                }
-            } 
-            else if (!left.type.equals(right.type)) {
-                // Si no son compatibles, generamos un error
-                tabla.add("Error Semántico en expresión-> Tipos incompatibles: " + left.type + " y " + right.type);
-            }
-
-            // Generamos el código intermedio con una nueva variable temporal
-            String temp = linkers.newTemp();
-            intermedia.add(new TAC(op, left.place, right.place, temp));
-            left = new ExpressionResult(expectedType, temp);
-        }}
-    ) // Eliminamos el * o + ya que no queremos repeticiones vacías
-    { return left; }
+String termino(String expectedType) : {
+    String type = expectedType;
+    String term = "";
+    String factorType;
+} {
+    term = factor(expectedType)
+    (
+        operadorAritmetico()
+        {
+            Token op = token;
+            String sigFactor = factor(expectedType);
+            term += " " + op.image + " " + sigFactor;
+        }
+    )*
+    { return term; }
 }
 
 
 
-ExpressionResult termino(String expectedType) : {
-    ExpressionResult left, right;
-    String op;
-} {
-    left = factor(expectedType) 
-    (
-        { if (nextTokenIsOperadorAritmetico()) {
-            op = operadorAritmetico();
-            right = factor(expectedType); // Procesamos el siguiente factor
-
-            if (!left.type.equals(expectedType) || !right.type.equals(expectedType)) {
-                // Si los tipos no coinciden con lo esperado, lanzamos un error
-                tabla.add("Error Semántico -> Tipo incorrecto en operación. Se esperaba: " + expectedType);
-            }
-
-            // Generamos el código intermedio
-            String temp = linkers.newTemp();
-            intermedia.add(new TAC(op, left.place, right.place, temp));
-            left = new ExpressionResult(expectedType, temp);
-        }}
-    ) // Eliminamos el * o + ya que no queremos repeticiones vacías
-    { return left; }
-}
-
-
-ExpressionResult factor(String expectedType) : {
+String factor(String expectedType) : {
     Token token = null;
     String type = "";
-    String place = "";
-    ExpressionResult res = null; // Inicialización corregida
+    String res = ""; // Inicialización corregida
 } {
     try {
         {if (nextTokenIs(linkersConstants.ParentesisAbre)) {
-            res = operacionParentesis(expectedType);
-            type = res.type;
-            place = res.place;
+            jj_consume_token(linkersConstants.ParentesisAbre);
+            res = expresion(expectedType);
+            jj_consume_token(linkersConstants.ParentesisCierra);
+            type = expectedType;
         } else if (nextTokenIs(linkersConstants.NUMERO)) {
             token = jj_consume_token(linkersConstants.NUMERO);
             type = "int";
-            place = token.image;
+            res = token.image;
         } else if (nextTokenIs(linkersConstants.NUMERO_FLOTANTE)) {
             token = jj_consume_token(linkersConstants.NUMERO_FLOTANTE);
             type = "float";
-            place = token.image;
+            res = token.image;
         } else if (nextTokenIs(linkersConstants.VERDADERO)) {
             token = jj_consume_token(linkersConstants.VERDADERO);
             type = "boolean";
-            place = "1";
+            res = token.image;
         } else if (nextTokenIs(linkersConstants.FALSO)) {
             token = jj_consume_token(linkersConstants.FALSO);
             type = "boolean";
-            place = "0";
+            res = token.image;
         } else if(nextTokenIs(linkersConstants.CADENA)) {
             token = jj_consume_token(linkersConstants.CADENA);
             type = "string";
-            place = token.image;
+            res = token.image;
         } else if (nextTokenIs(linkersConstants.LETRA)) {
             token = jj_consume_token(linkersConstants.LETRA);
             type = "character";
-            place = token.image;
+            res = token.image;
         } else if (nextTokenIs(linkersConstants.IDENTIFICADOR)) {
             token = jj_consume_token(linkersConstants.IDENTIFICADOR);
             if (linkers.declaredVariables.containsKey(token.image)) {
                 type = linkers.declaredVariables.get(token.image);
-                place = token.image;
+                res = token.image;
             } else {
                 tabla.add("Error Semántico -> Variable no declarada: " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
                 type = "error";
             }
-        } else if (nextTokenIs(linkersConstants.Funcion)) {
-            res = llamadaFuncion();
-            type = res.type;
-            place = res.place;
-        } else {
+        }  else {
             type = "error";
-        }}
-
-        // Verificar tipos si se espera uno específico
-        {if (token != null && !"any".equals(expectedType) && !type.equals(expectedType) && !type.equals("error")) {
-            tabla.add("Error Semántico -> Tipo incorrecto. Se esperaba: " + expectedType + " pero se obtuvo: " + type + " en línea " + token.beginLine + ", columna " + token.beginColumn);
-        }}
+        }
+    }
     } catch (ParseException e) {
         tabla.add("Error de Sintaxis -> " + e.getMessage());
     }
-    {return (res != null) ? res : new ExpressionResult(type, place);}
+    {return (res != null) ? res : "Elemento no encontrado";}
 }
 
 boolean nextTokenIs(int kind) : {
@@ -1572,108 +1225,84 @@ boolean nextTokenIsOperadorAritmetico() : {
            t.kind == linkersConstants.OperacionResiduo;}
 }
 
-ExpressionResult operacionParentesis(String expectedType) : {
-    ExpressionResult res=null;
-} {
-    try {
-        {jj_consume_token(linkersConstants.ParentesisAbre);
-        res = expresion(expectedType);
-        jj_consume_token(linkersConstants.ParentesisCierra);
-
-        if (!res.type.equals(expectedType)) {
-            tabla.add("Error Semántico -> Tipo incorrecto en la operación entre paréntesis. Se esperaba: " + expectedType + " pero se obtuvo: " + res.type);
-        }}
-    } catch (ParseException e) {
-        tabla.add("Error de Sintaxis -> " + e.getMessage());
-    }
-    {return res;}
-}
-
-ExpressionResult valor(String expectedType) : {
+Token valor() : {
     Token token = null;
-    String type = "";
-    String place = "";
 } {
     try {
         {if (nextTokenIs(linkersConstants.NUMERO)) {
             token = jj_consume_token(linkersConstants.NUMERO);
-            type = "int";
-            place = token.image;
+            acumulador_cpp += token.image;
         } else if (nextTokenIs(linkersConstants.NUMERO_FLOTANTE)) {
             token = jj_consume_token(linkersConstants.NUMERO_FLOTANTE);
-            type = "float";
-            place = token.image;
+            acumulador_cpp += token.image;
         } else if (nextTokenIs(linkersConstants.VERDADERO)) {
             token = jj_consume_token(linkersConstants.VERDADERO);
-            type = "boolean";
-            place = "1";
+            acumulador_cpp += "true";
         } else if (nextTokenIs(linkersConstants.FALSO)) {
             token = jj_consume_token(linkersConstants.FALSO);
-            type = "boolean";
-            place = "0";
+            acumulador_cpp += "false";
         } else if(nextTokenIs(linkersConstants.CADENA)) {
             token = jj_consume_token(linkersConstants.CADENA);
-            type = "string";
-            place = token.image;
+            acumulador_cpp += token.image;
         } else if (nextTokenIs(linkersConstants.LETRA)) {
             token = jj_consume_token(linkersConstants.LETRA);
-            type = "character";
-            place = token.image;
+            acumulador_cpp += token.image;
         } else if (nextTokenIs(linkersConstants.IDENTIFICADOR)) {
             token = jj_consume_token(linkersConstants.IDENTIFICADOR);
             if (linkers.declaredVariables.containsKey(token.image)) {
-                type = linkers.declaredVariables.get(token.image);
-                place = token.image;
+                verificarExistenciaVariable(token);
+                acumulador_cpp += token.image;
             } else {
                 tabla.add("Error Semántico -> Variable no declarada: " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
-                type = "error";
             }
         } else {
             tabla.add("Error Semántico -> Token inesperado en la condición.");
             throw new ParseException("Token inesperado en la condición.");
         }}
-
-        // Verificar tipos si se espera uno específico
-        {if (token != null && !"any".equals(expectedType) && !type.equals(expectedType) && !type.equals("error")) {
-            tabla.add("Error Semántico -> Tipo incorrecto. Se esperaba: " + expectedType + " pero se obtuvo: " + type + " en línea " + token.beginLine + ", columna " + token.beginColumn);
-        }}
     } catch (ParseException e) {
         tabla.add("Error de Sintaxis -> " + e.getMessage());
         throw e;
     }
-    {return new ExpressionResult(type, place);}
+    {return token;}
 }
 
-ExpressionResult concatenar() : {
-    ExpressionResult left, right;
-    String temp;
-    Token token = null;
+boolean esTipoCompatible(String tipo1, String tipo2) : {} {
+    { return (tipo1.equals("int") && tipo2.equals("int")) || 
+             (tipo1.equals("float") && (tipo2.equals("int") || tipo2.equals("float"))) || 
+             (tipo1.equals("int") && tipo2.equals("float")); }
+}
+
+String actualizarTipoResultante(String tipo1, String tipo2) : {
+    String tipo;
 } {
-    left = expresion("string")// Empezamos con una expresión inicial, esperando tipo cadena
-    (
-        {if (nextTokenIsOperadorAritmetico() && getToken(1).image.equals("+")) { // Concatenación con operador "+"
-        jj_consume_token(linkersConstants.OperacionSuma); // Consumimos el "+" operador
-
-        // Evaluamos el siguiente valor en la concatenación
-        right = expresion("string");
-
-        // Si los tipos no son compatibles, convertimos a cadena
-        if (!left.type.equals("string")) {
-            temp = linkers.newTemp();
-            intermedia.add(new TAC("toString", left.place, temp)); // Conversión a cadena
-            left = new ExpressionResult("string", temp);
-        }
-        if (!right.type.equals("string")) {
-            temp = linkers.newTemp();
-            intermedia.add(new TAC("toString", right.place, temp)); // Conversión a cadena
-            right = new ExpressionResult("string", temp);
-        }
-
-        // Generamos una nueva variable temporal para la concatenación
-        temp = linkers.newTemp();
-        intermedia.add(new TAC("+", left.place, right.place, temp));
-        left = new ExpressionResult("string", temp);
-        }}
-    )    
-    { return left; }
+    {if (tipo1.equals("float") || tipo2.equals("float")) {
+        tipo = "float";
+    } else if (tipo1.equals("int") && tipo2.equals("int")) {
+        tipo ="int";
+    } else {
+        tipo = "error";
+    }}
+    {return tipo;}
 }
+
+
+boolean verificarCompatibilidadTipos(String varType, String expr) : {
+    boolean compatible = false; // Variable para almacenar el resultado
+} {
+    {
+        // Reglas para validar compatibilidad de tipos
+        if (varType.equals("int") && expr.matches("[0-9]+")) {
+            compatible = true;
+        } else if (varType.equals("float") && expr.matches("[0-9]+(\\.[0-9]+)?")) {
+            compatible = true;
+        } else if (varType.equals("int") && expr.matches("[0-9]+") && varType.equals("float") && expr.matches("[0-9]+(\\.[0-9]+)?")) {
+            compatible = true;
+        }else if (varType.equals("boolean") && (expr.equals("true") || expr.equals("false"))) {
+            compatible = true;
+        } else if (varType.equals("string") && expr.startsWith("\"") && expr.endsWith("\"")) {
+            compatible = true;
+        }
+    }
+    { return compatible; }
+}
+

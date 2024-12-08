@@ -1,0 +1,1265 @@
+options {
+    LOOKAHEAD = 1;
+}
+
+PARSER_BEGIN(koicompiler)
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.io.*;
+import java.util.*;
+
+class koicompiler {
+    
+    private static File codigoFuente;
+    private static GeneradorCodigoCPP escritor;//Objeto de la clase GeneradorCodigoCPP transcribe a CPP
+    static ArrayList<String> tabla = koicompilerTokenManager.tablaErrores;
+    static Map<String, String> declaredVariables = new HashMap<String, String>();
+    static String cpp = "";//Variable para acumular código
+
+    public static void main(String[] args) throws FileNotFoundException {
+        codigoFuente = new File(args[0]);
+        String nombreArchivo = obtenerNombreArchivo(codigoFuente);
+    
+        // Inicializa aquí con el directorio y el nombre del archivo sin extensión
+        escritor = new GeneradorCodigoCPP("C:/KoicompilerProyectos/", nombreArchivo);
+
+        /* 
+        //Rutas para el archivo ensamblador entrada y salida
+        String sourcePath = "C:/KoicompilerProyectos/" + nombreArchivo + ".cpp";
+        String outputPath = "C:/KoicompilerProyectos/" + nombreArchivo + ".s";
+        CompilerUtil.compilarAEnsamblador(sourcePath, outputPath);
+*/
+    
+        try {
+            koicompiler koi = new koicompiler(new FileInputStream(codigoFuente));
+            koi.codigoEJECUTABLE();
+    
+            if (!koi.tabla.isEmpty()) {
+                System.out.println("\u001B[31m\nErrores encontrados:\n\u001B[0m");
+                for (String error : koi.tabla) {
+                    System.out.println(error);
+                }
+            } else {
+                System.out.println("\u001B[32mAnálisis exitoso\u001B[0m");
+                CompilerUtil.compilarAExecutable("C:/KoicompilerProyectos/" + nombreArchivo + ".cpp");
+            }
+            }
+    
+         catch (ParseException e) {
+            System.out.println("Error de Análisis -> " + e.getMessage());
+        }
+    }
+    
+
+    static void checkAndAddVariable(Token id, String type, int line, int column) {
+        if (declaredVariables.containsKey(id.image)) {
+            tabla.add("Error Semántico -> Variable repetida: " + id.image + " en línea " + line + ", columna " + column);
+        } else {
+            declaredVariables.put(id.image, type);
+        }
+    }
+
+
+    static String obtenerNombreArchivo(File file) {
+        String nombre = file.getName();
+        int pos = nombre.lastIndexOf(".");
+        return pos > 0 ? nombre.substring(0, pos) : nombre;
+    }
+
+}
+        //Logica de la transformación de codigo fuente a C++
+class GeneradorCodigoCPP{
+    private File f;
+    public GeneradorCodigoCPP(String directorio, String nombreFuente){
+        f = new File(directorio + nombreFuente + ".cpp");
+        limpiarCPP();
+        escribirCod(
+            "#include <iostream>\n" +
+            "#include <Windows.h>\n" +
+            "using namespace std;\n" + 
+            "int main(){\n" +
+            "SetConsoleOutputCP(CP_UTF8);\n"
+        );
+    }
+
+    //Escribe en el archivo cpp destino
+    public void escribirCod(String s) {  
+        try {
+            FileWriter w = new FileWriter(f, true);//Grcias a estos parametros agrega y no sobreescribe
+            BufferedWriter bw = new BufferedWriter(w);
+            PrintWriter wr = new PrintWriter(bw);
+            wr.write(s);  // Escribimos en el archivo
+            wr.close();
+            bw.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.out.println("Error al escribir en el cpp");
+        }
+    }
+    //Limpia completamente el archivo CPP
+    private void limpiarCPP() {
+        try {
+            FileWriter w = new FileWriter(f, false);
+            BufferedWriter bw = new BufferedWriter(w);
+            PrintWriter wr = new PrintWriter(bw);
+            wr.write("");  // Escribimos en el archivo
+            wr.close();
+            bw.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.out.println("No se pudo limpiar");
+        }
+    }
+
+    public void retornoCPP() {
+        escribirCod("\nreturn 0;\n}");
+    }
+}
+
+        //CLASE EJECUTORA DE GCC PARA ENSAMBLADOR
+  /*  
+    class CompilerUtil {
+
+        public static void compilarAEnsamblador(String sourceFilePath, String outputFilePath) {
+            ProcessBuilder pb = new ProcessBuilder(
+                "gcc", "-S", sourceFilePath, "-o", outputFilePath
+            );
+    
+            try {
+                Process proceso = pb.start();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(proceso.getInputStream()));
+                BufferedReader errorReader = new BufferedReader(new InputStreamReader(proceso.getErrorStream()));
+    
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    System.out.println(line);
+                }
+                while ((line = errorReader.readLine()) != null) {
+                    System.err.println(line);
+                }
+    
+                int exitCode = proceso.waitFor();
+                System.out.println("GCC terminó con el código de salida: " + exitCode);
+    
+            } catch (IOException | InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    
+*/ 
+
+
+
+//CLASE CONVERTIDORA CPP A EJECUTABLE
+class CompilerUtil {
+    public static void compilarAExecutable(String sourceFilePath) {
+        String outputFilePath = sourceFilePath.replace(".cpp", ".exe");
+        ProcessBuilder pb = new ProcessBuilder("g++", sourceFilePath, "-o", outputFilePath);
+
+        try {
+            Process proceso = pb.start();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(proceso.getInputStream()));
+            BufferedReader errorReader = new BufferedReader(new InputStreamReader(proceso.getErrorStream()));
+
+            String line;
+            while ((line = reader.readLine()) != null) {
+                System.out.println(line);
+            }
+            while ((line = errorReader.readLine()) !=  null) {
+                System.err.println(line);
+            }
+
+            int exitCode = proceso.waitFor();
+            System.out.println("GCC terminó con el código de salida: " + exitCode);
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+PARSER_END(koicompiler)
+
+TOKEN_MGR_DECLS : {
+    static ArrayList<String> tablaErrores = new ArrayList<String>();
+
+    public void LexicalError(boolean EOFSeen, int lexState, int errorLine, int errorColumn, String errorAfter, char curChar) {
+        String errorMessage = "Error Léxico -> Línea: " + errorLine + ", Columna: " + errorColumn + ", Descripción: ";
+        if (EOFSeen) {
+            errorMessage += "<EOF> encontrado, pero esperaba más caracteres.";
+        } else {
+            errorMessage += "\"" + curChar + "\" encontrado, pero esperaba más caracteres.";
+        }
+        tablaErrores.add(errorMessage);
+    }
+}
+
+TOKEN: { //CARACTERES
+    <ABRIR_LLAVE: "{"> 
+    | <CERRAR_LLAVE: "}">
+    | <ABRIR_PARENTESIS: "(">
+    | <CERRAR_PARENTESIS: ")">
+    | <COMILLA_TEXTO: "\"">
+    | <DELIMITADOR: ";">
+    | <DOS_PUNTOS: ":">
+    | <ABRIR_CORCHETE: "[">
+    | <CERRAR_CORCHETE: "]">
+    | <OP_FUNC: "f$">
+}
+
+TOKEN: {//PALABRAS RESERVADAS
+    <MAIN: "MAIN">
+    | <LEER: "SCANNER">
+    | <ESCRIBIR: "PRINT">
+    | <CONDICIONAL_IF: "IF">
+    | <CONDICIONAL_IFTHEN: "IFTHEN">
+    | <CONDICIONAL_ELSE: "ELSE">
+    | <CONDICIONAL_SWITCH: "SWITCH">
+    | <CICLO_WHILE: "WHILE">
+    | <CICLO_FOR: "FOR">
+    | <CASO_POR_DEFECTO: "DEFAULT">
+    | <CASO_SWITCH: "CASE">
+    | <INTERRUPCION: "BREAK">
+    | <VERDADERO: "true">
+    | <FALSO: "false">
+    | <MODI_ACC_PUBLIC: "PUBLICO">
+    | <MODI_ACC_PRIVADO: "PRIVADO">
+    | <MODI_ACC_PROTEGIDO: "PROTEGIDO">
+    | <ESTATICO: "ESTATICO">
+    | <VACIO: "VACIO">
+}
+
+TOKEN: {// TIPOS DE DATO
+    <TIPO_INT: "int">
+    | <TIPO_FLOAT: "float">
+    | <TIPO_BOOLEAN: "boolean">
+}
+
+TOKEN: {// OPERADORES ARITMETICOS
+    <OP_ADDEQUALS: "+=">
+    | <OP_SUBSEQUALS: "-=">
+    | <OP_MULTEQUALS: "*=">
+    | <OP_DIVEQUALS: "/=">
+    | <OP_ADD: "+">
+    | <OP_SUBS: "-">
+    | <OP_MULT: "*">
+    | <OP_DIV: "/">
+    | <OP_MOD: "%">
+}
+
+TOKEN: {// OPERADORES RELACIONALES
+    <OP_ASIG: "=">
+    | <OP_MORE: ">">
+    | <OP_LESS: "<">
+    | <OP_LESS_EQUALS: "<=">
+    | <OP_MORE_EQUALS: ">=">
+    | <OP_EQUALS: "==">
+    | <OP_DIFF: "!=">
+}
+
+TOKEN: {// OPERADORES LOGICOS
+    <OP_AND: "&&">
+    | <OP_OR: "||">
+    | <OP_NOT: "!">
+}
+
+TOKEN: {
+    <CADENA: "\""(~["\""])*"\""> 
+    | <IDENTIFICADOR: (<LETRA>)+ (<LETRA>|<NUMERO>)* > 
+    | <NUMERO_FLOTANTE: (["0"-"9"])+"."(["0"-"9"])+> 
+    | <NUMERO: (["0"-"9"])+>    
+    | <#LETRA: (["A"-"Z","a"-"z","á","é","í","ó","ú"])+>  
+}
+
+SKIP: {
+    " " | "\r" | "\t" | "\n"
+}
+
+SPECIAL_TOKEN: {
+    < ANYTHING : ~[] > // Esto capturará cualquier token no definido
+    {
+        koicompilerTokenManager.tablaErrores.add("Error Léxico -> Línea: " + input_stream.getEndLine() + ", Columna: " + input_stream.getEndColumn() + ", Token no reconocido.");
+    }
+}
+
+void codigoEJECUTABLE() : {}{
+
+    try {
+        (decFunc())*
+        (
+            try{<MAIN> }catch(ParseException e){tabla.add("Error de Sintaxis -> " + e.getMessage());}
+            try{<ABRIR_LLAVE> }catch(ParseException e){tabla.add("Error de Sintaxis -> " + e.getMessage());}
+            
+            (sentencias())* 
+
+            try{<CERRAR_LLAVE> }catch(ParseException e){tabla.add("Error de Sintaxis -> " + e.getMessage());} )
+
+            
+            {escritor.escribirCod("// Inicio del programa en C++\n");
+            escritor.escribirCod(cpp);
+            escritor.escribirCod("cout << \"\\nPresiona Enter para salir...\";\n");
+            escritor.escribirCod("cin.ignore();\n");
+            escritor.escribirCod("cin.get();\n");
+            escritor.escribirCod("return 0;\n}");}
+            <EOF>
+       
+
+        
+    } catch (ParseException e) {
+        Token t;    
+        do {
+            t = getNextToken();
+        } while (t.kind != EOF);
+    
+        tabla.add("Error de Sintaxis -> " + e.getMessage());
+    }
+
+}
+
+
+void sentencias() : {} {
+    declararVariables()
+    | asignacion()
+    | entrada()
+    | salida()
+    | condicionalIf()
+    | condicionalIfthen()
+    | cicloFor()
+    | condicionalSwitch() 
+    | cicloWhile() 
+}
+
+
+void verificarExistenciaVariable(Token token) : {} {
+    {
+        if (!koicompiler.declaredVariables.containsKey(token.image)) {
+            koicompiler.tabla.add("Error Semántico -> Variable no declarada: " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
+        }
+    }
+}
+
+String verificarExistenciaYObtenerTipo(Token token) : {
+    String tipo;
+} {
+    {
+        if (token.kind == koicompilerConstants.IDENTIFICADOR) {
+            if (koicompiler.declaredVariables.containsKey(token.image)) {
+                tipo = koicompiler.declaredVariables.get(token.image);
+            } else {
+                koicompiler.tabla.add("Error Semántico -> Variable no declarada: " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
+                tipo = "error";
+            }
+        } else if (token.kind == koicompilerConstants.NUMERO) {
+            tipo = "int";
+        } else if (token.kind == koicompilerConstants.NUMERO_FLOTANTE) {
+            tipo = "float";
+        } else if (token.kind == koicompilerConstants.VERDADERO || token.kind == koicompilerConstants.FALSO) {
+            tipo = "boolean";
+        } else {
+            tipo = "error";
+        }
+    }
+    { return tipo; }
+}
+
+
+
+void condicionalIf() : {} {
+    try {
+        <CONDICIONAL_IF>
+        { 
+            // Inicia la estructura if en C++
+            koicompiler.cpp += "if (";
+        }
+        try {
+            <ABRIR_PARENTESIS>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        condicion()
+        try {
+            <CERRAR_PARENTESIS>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        { 
+            // Cierra la condición y abre el bloque
+            koicompiler.cpp += ") {\n";
+        }
+        try {
+            <ABRIR_LLAVE>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        (sentencias())*
+        try {
+            <CERRAR_LLAVE>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        { 
+            // Cierra el bloque if
+            koicompiler.cpp += "}\n";
+        }
+        
+        // Manejo del bloque else opcional
+        [ 
+            <CONDICIONAL_ELSE>
+            { 
+                // Añade la estructura else en C++
+                koicompiler.cpp += "else {\n";
+            }
+            try {
+                <ABRIR_LLAVE>
+            } catch (ParseException e) {
+                koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+            }
+            (sentencias())*
+            try {
+                <CERRAR_LLAVE>
+            } catch (ParseException e) {
+                koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+            }
+            { 
+                // Cierra el bloque else
+                koicompiler.cpp += "}\n";
+            }
+        ]
+    } catch (ParseException e) {
+        koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+    }
+}
+
+
+
+void condicionalIfthen() : {} {
+    try {
+        <CONDICIONAL_IFTHEN>
+        { 
+            // Inicia la estructura if en C++
+            koicompiler.cpp += "if (";
+        }
+        try {
+            <ABRIR_PARENTESIS>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        condicion()
+        try {
+            <CERRAR_PARENTESIS>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        { 
+            // Cierra la condición y abre el bloque
+            koicompiler.cpp += ") {\n";
+        }
+        try {
+            <ABRIR_LLAVE>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        (sentencias())*
+        try {
+            <CERRAR_LLAVE>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        { 
+            // Cierra el bloque if
+            koicompiler.cpp += "}\n";
+        }
+    } catch (ParseException e) {
+        koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+    }
+}
+
+
+
+void condicion() : {} {
+    { koicompiler.cpp += "("; }
+    condicionSimple()
+    (
+        operadorLogico()
+        { koicompiler.cpp += " " + token.image + " "; }
+        condicionSimple()
+    )*
+    { koicompiler.cpp += ")"; }
+}
+
+
+void condicionSimple() : {
+    Token token1, token2;
+    String type1 = "", type2 = "";
+} {
+    {
+        token1 = valor();
+        type1 = verificarExistenciaYObtenerTipo(token1);
+        
+        operadorRelacional();
+        { koicompiler.cpp += " " + token.image + " "; }
+        
+        token2 = valor();
+        type2 = verificarExistenciaYObtenerTipo(token2);
+        
+        if (!type1.equals(type2) && !type1.equals("error") && !type2.equals("error")) {
+            koicompiler.tabla.add("Error Semántico en condición-> Tipos incompatibles en la condición: " + type1 + " y " + type2 + " en línea " + token1.beginLine + ", columna " + token1.beginColumn);
+        }
+    }
+}
+
+
+
+
+Token valor() : {
+    Token token = null;
+} {
+    try {
+        {if (nextTokenIs(koicompilerConstants.NUMERO)) {
+            token = jj_consume_token(koicompilerConstants.NUMERO);
+            koicompiler.cpp += token.image;
+        } else if (nextTokenIs(koicompilerConstants.NUMERO_FLOTANTE)) {
+            token = jj_consume_token(koicompilerConstants.NUMERO_FLOTANTE);
+            koicompiler.cpp += token.image;
+        } else if (nextTokenIs(koicompilerConstants.VERDADERO)) {
+            token = jj_consume_token(koicompilerConstants.VERDADERO);
+            koicompiler.cpp += "true";
+        } else if (nextTokenIs(koicompilerConstants.FALSO)) {
+            token = jj_consume_token(koicompilerConstants.FALSO);
+            koicompiler.cpp += "false";
+        } else if (nextTokenIs(koicompilerConstants.IDENTIFICADOR)) {
+            token = jj_consume_token(koicompilerConstants.IDENTIFICADOR);
+            verificarExistenciaVariable(token);
+            koicompiler.cpp += token.image;
+        } else {
+            koicompiler.tabla.add("Error de Sintaxis -> Token inesperado en la condición.");
+            throw new ParseException("Token inesperado en la condición.");
+        }}
+
+    } catch (ParseException e) {
+        koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        throw e;
+    }
+    { return token; }
+}
+
+
+
+
+
+void operadorRelacional() : {} {
+    (
+        <OP_MORE>
+        | <OP_LESS>
+        | <OP_LESS_EQUALS>
+        | <OP_MORE_EQUALS>
+        | <OP_EQUALS>
+        | <OP_DIFF>
+    )
+}
+
+void operadorLogico() : {} {
+    (
+        <OP_AND>
+        | <OP_OR>
+	    | <OP_NOT>
+    )
+}
+void entrada() : {
+    Token token;
+} {
+    try {
+        <LEER>
+        try {
+            <ABRIR_PARENTESIS>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+
+        {
+            token = jj_consume_token(koicompilerConstants.IDENTIFICADOR);
+            if (!koicompiler.declaredVariables.containsKey(token.image)) {
+                koicompiler.tabla.add("Error Semántico en entrada-> Variable no declarada: " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
+            } else {
+                String varType = koicompiler.declaredVariables.get(token.image);
+                String cppCode = "";
+
+                // Generar el código C++ para la entrada
+                switch (varType) {
+                    case "int":
+                        cppCode = "cin >> " + token.image + "; \n";
+                        break;
+                    case "float":
+                        cppCode = "cin >> " + token.image + "; \n";
+                        break;
+                    case "boolean":
+                        cppCode = "cin >> " + token.image + "; \n";
+                        break;
+                    default:
+                        koicompiler.tabla.add("Error Semántico en entrada-> Tipo de variable no soportado: " + varType + " para la variable " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
+                }
+
+                cpp += cppCode;
+            }
+        }
+        try {
+            <CERRAR_PARENTESIS>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        try {
+            <DELIMITADOR>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+    } catch (ParseException e) {
+        Token t;
+        do {
+            t = getNextToken();
+        } while (t.kind != DELIMITADOR);
+        koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+    }
+}
+
+
+void salida() : {
+    Token token;
+    String cppCode = "cout << ";
+} {
+    try {
+        <ESCRIBIR>
+        try {
+            <ABRIR_PARENTESIS>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+
+        {
+            token = getToken(1);
+        
+            if (token.kind == koicompilerConstants.CADENA) {
+                token = jj_consume_token(koicompilerConstants.CADENA);
+                cppCode += token.image;
+            } else if (token.kind == koicompilerConstants.IDENTIFICADOR) {
+                token = jj_consume_token(koicompilerConstants.IDENTIFICADOR);
+                if (!koicompiler.declaredVariables.containsKey(token.image)) {
+                    koicompiler.tabla.add("Error Semántico en salida-> Variable no declarada: " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
+                } else {
+                    cppCode += token.image;
+                }
+            } else {
+                koicompiler.tabla.add("Error de Sintaxis -> Se esperaba una cadena o un identificador, pero se encontró: " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
+                jj_consume_token(token.kind); // Consumir el token inesperado para continuar
+            }
+
+            while (nextTokenIs(koicompilerConstants.OP_ADD)) {
+                jj_consume_token(koicompilerConstants.OP_ADD);
+                token = getToken(1);
+                cppCode += " << ";
+                if (token.kind == koicompilerConstants.CADENA) {
+                    token = jj_consume_token(koicompilerConstants.CADENA);
+                    cppCode += token.image;
+                } else if (token.kind == koicompilerConstants.IDENTIFICADOR) {
+                    token = jj_consume_token(koicompilerConstants.IDENTIFICADOR);
+                    if (!koicompiler.declaredVariables.containsKey(token.image)) {
+                        koicompiler.tabla.add("Error Semántico en salida-> Variable no declarada: " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
+                    } else {
+                        cppCode += token.image;
+                    }
+                } else {
+                    koicompiler.tabla.add("Error de Sintaxis -> Se esperaba una cadena o un identificador, pero se encontró: " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
+                    jj_consume_token(token.kind); // Consumir el token inesperado para continuar
+                }
+            }
+
+            cppCode += " << endl; \n";
+            cpp += cppCode;
+        }
+
+        try {
+            <CERRAR_PARENTESIS>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        try {
+            <DELIMITADOR>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+    } catch (ParseException e) {
+        Token t;
+        do {
+            t = getNextToken();
+        } while (t.kind != DELIMITADOR && t.kind != EOF);
+        koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+    }
+}
+
+
+
+
+
+
+void declararVariables() : {} {
+    VariableINT() | VariableFLOAT() | VariableBOOLEAN()
+}
+
+
+void VariableINT() : {
+    Token id;
+    Token num;
+    int line, column;
+} {
+    try {
+        <TIPO_INT>
+        id = <IDENTIFICADOR>
+        {
+            line = id.beginLine;
+            column = id.beginColumn;
+            koicompiler.checkAndAddVariable(id, "int", line, column);
+        }
+        {String cppCode = "int " + id.image;}
+        [ 
+            <OP_ASIG> 
+            try { 
+                num = <NUMERO>
+                {cppCode += " = " + num.image;}
+            } catch (ParseException e) { 
+                koicompiler.tabla.add("Error Semántico -> " + e.getMessage()); 
+            } 
+        ]
+        <DELIMITADOR>
+        {cppCode += "; \n";}
+        {cpp += cppCode; }
+    } catch (ParseException e) {
+        Token t;
+        do {
+            t = getNextToken();
+        } while (t.kind != DELIMITADOR);
+        koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+    }
+}
+
+void VariableFLOAT() : {
+    Token id;
+    Token num;
+    int line, column;
+} {
+    try {
+        <TIPO_FLOAT>
+        id = <IDENTIFICADOR>
+        {
+            line = id.beginLine;
+            column = id.beginColumn;
+            koicompiler.checkAndAddVariable(id, "float", line, column);
+        }
+        {String cppCode = "float " + id.image;}
+        [ 
+            <OP_ASIG> 
+            try { 
+                num = <NUMERO_FLOTANTE>
+                {cppCode += " = " + num.image;}
+            } catch (ParseException e) { 
+                koicompiler.tabla.add("Error Semántico -> " + e.getMessage()); 
+            } 
+        ]
+        <DELIMITADOR>
+        {cppCode += "; \n";}
+        {cpp += cppCode; }
+    } catch (ParseException e) {
+        Token t;
+        do {
+            t = getNextToken();
+        } while (t.kind != DELIMITADOR);
+        koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+    }
+}
+
+void VariableBOOLEAN() : {
+    Token id;
+    Token boolValue = null;  // Inicializamos boolValue
+    int line, column;
+} {
+    try {
+        <TIPO_BOOLEAN>
+        id = <IDENTIFICADOR>
+        {
+            line = id.beginLine;
+            column = id.beginColumn;
+            koicompiler.checkAndAddVariable(id, "boolean", line, column);
+        }
+        {String cppCode = "bool " + id.image;}
+        [ 
+            <OP_ASIG> 
+            try { 
+                boolValue = <VERDADERO> | <FALSO>
+                {cppCode += " = " + (boolValue.image.equals("TRUE") ? "true" : "false");}  // Asignamos el valor correcto
+            } catch (ParseException e) { 
+                koicompiler.tabla.add("Error Semántico -> " + e.getMessage()); 
+            } 
+        ]
+        <DELIMITADOR>
+        {cppCode += "; \n";}
+        {cpp += cppCode; }
+    } catch (ParseException e) {
+        Token t;
+        do {
+            t = getNextToken();
+        } while (t.kind != DELIMITADOR);
+        koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+    }
+}
+
+
+
+void asignacion() : {
+    Token id;
+    String varType = "";
+    String expr = "";
+} {
+    try {
+        id = <IDENTIFICADOR>
+        {
+            if (!koicompiler.declaredVariables.containsKey(id.image)) {
+                koicompiler.tabla.add("Error Semántico -> Variable no declarada: " + id.image + " en línea " + id.beginLine + ", columna " + id.beginColumn);
+            } else {
+                varType = koicompiler.declaredVariables.get(id.image);
+            }
+        }
+        <OP_ASIG>
+        {
+            expr = expresion(varType); // Ajustado para que coincida con la firma correcta
+        }
+        <DELIMITADOR>
+        {
+            // Generar el código C++ para la asignación
+            String cppCode = id.image + " = " + expr + "; \n";
+            cpp += cppCode;
+        }
+    } catch (ParseException e) {
+        Token t;
+        do {
+            t = getNextToken();
+        } while (t.kind != DELIMITADOR && t.kind != EOF);
+        koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+    }
+}
+
+
+String termino(String expectedType) : {
+    String type = expectedType;
+    String term = "";
+} {
+    { term = factor(expectedType); }
+    (
+        operadorAritmetico()
+        {
+            Token op = token;
+            String nextFactor = factor(expectedType);
+            term += " " + op.image + " " + nextFactor;
+        }
+    )*
+    { return term; }
+}
+
+String expresion(String expectedType) : {
+    String type = expectedType;
+    String expr = "";
+} {
+    { expr = termino(expectedType); }
+    (
+        operadorAritmetico()
+        {
+            Token op = token;
+            String nextTerm = termino(expectedType);
+            expr += " " + op.image + " " + nextTerm;
+        }
+    )*
+    { return expr; }
+}
+
+String factor(String expectedType) : {
+    Token token = null;
+    String type = "";
+    String value = "";
+} {
+    try {
+        {if (nextTokenIs(koicompilerConstants.ABRIR_PARENTESIS)) {
+            jj_consume_token(koicompilerConstants.ABRIR_PARENTESIS);
+            value = expresion(expectedType); // Ajustado para que coincida con la firma correcta
+            jj_consume_token(koicompilerConstants.CERRAR_PARENTESIS);
+            type = expectedType;
+        } else if (nextTokenIs(koicompilerConstants.NUMERO)) {
+            token = jj_consume_token(koicompilerConstants.NUMERO);
+            type = "int";
+            value = token.image;
+        } else if (nextTokenIs(koicompilerConstants.NUMERO_FLOTANTE)) {
+            token = jj_consume_token(koicompilerConstants.NUMERO_FLOTANTE);
+            type = "float";
+            value = token.image;
+        } else if (nextTokenIs(koicompilerConstants.IDENTIFICADOR)) {
+            token = jj_consume_token(koicompilerConstants.IDENTIFICADOR);
+            if (koicompiler.declaredVariables.containsKey(token.image)) {
+                type = koicompiler.declaredVariables.get(token.image);
+                value = token.image;
+            } else {
+                koicompiler.tabla.add("Error Semántico -> Variable no declarada: " + token.image + " en línea " + token.beginLine + ", columna " + token.beginColumn);
+                type = "error"; 
+            }
+        } else {
+            type = "error";
+        }
+
+        if (token != null && !type.equals(expectedType) && !type.equals("error")) {
+            koicompiler.tabla.add("Error Semántico -> Tipo incorrecto. Se esperaba: " + expectedType + " pero se obtuvo: " + type + " en línea " + token.beginLine + ", columna " + token.beginColumn);
+        }}
+    } catch (ParseException e) {
+        koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+    }
+    { return value; }
+}
+
+
+// Método auxiliar para verificar el próximo token
+boolean nextTokenIs(int kind) : {
+    Token t;
+} {
+    {t = getToken(1);
+    return t.kind == kind;}
+}
+
+// Función para manejar operaciones con paréntesis
+String operacionParentesis(String expectedType) : {
+    String type = "";
+    String value = "";
+} {
+    try {
+        {jj_consume_token(koicompilerConstants.ABRIR_PARENTESIS);
+        value = expresion(expectedType); // Usamos la función expresion para manejar la operación dentro de los paréntesis
+        jj_consume_token(koicompilerConstants.CERRAR_PARENTESIS);
+
+        if (!type.equals(expectedType)) {
+            koicompiler.tabla.add("Error Semántico -> Tipo incorrecto en la operación entre paréntesis. Se esperaba: " + expectedType + " pero se obtuvo: " + type);
+        }}
+    } catch (ParseException e) {
+        koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+    }
+    { return value; }
+}
+
+
+void operadorAritmetico() : {} {
+    (<OP_ADD> | <OP_SUBS> | <OP_MULT> | <OP_DIV> | <OP_MOD>)
+}
+
+
+void cicloFor() : {
+    Token id;
+    Token num;
+    Token operador;
+    String varType = "";
+    String inicializacion = "";
+    String condicion = "";
+    String incremento = "";
+} {
+
+    
+    try {
+        <CICLO_FOR>
+        { 
+            // Inicia la estructura for en C++
+            koicompiler.cpp += "for (";
+        }
+        try {
+            <ABRIR_PARENTESIS>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+
+        // Declaración de variables o asignación
+        {
+            if (nextTokenIs(koicompilerConstants.TIPO_INT) || nextTokenIs(koicompilerConstants.TIPO_FLOAT) || nextTokenIs(koicompilerConstants.TIPO_BOOLEAN)) {
+                declararVariables();
+            } else {
+                asignacion();
+            }
+        }
+
+        // Añadir punto y coma en C++ para separar las partes del for
+        { koicompiler.cpp += " "; }
+
+        // Condición del for
+        condicion()
+        
+        try {
+            <DELIMITADOR>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+
+        // Añadir punto y coma para el incremento en C++
+        { koicompiler.cpp += "; "; }
+
+        // Incremento del for
+        id = <IDENTIFICADOR>
+        operador = <OP_ADDEQUALS> // Cambiar aquí para usar el operador correcto
+        num = <NUMERO>
+        { 
+            // Generar el incremento en C++
+            incremento = id.image + " " + operador.image + " " + num.image;
+            koicompiler.cpp += incremento + ") {\n";
+        }
+
+        try {
+            <CERRAR_PARENTESIS>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        try {
+            <ABRIR_LLAVE>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+
+        (sentencias())*
+
+        try {
+            <CERRAR_LLAVE>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        { 
+            // Cierra el bloque for
+            koicompiler.cpp += "}\n";
+        }
+    } catch (ParseException e) {
+        koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+    }
+}
+
+
+
+
+
+
+
+void condicionalSwitch() : {
+    Token id;
+    Token num;
+} {
+
+    
+    try {
+        <CONDICIONAL_SWITCH>
+        { 
+            // Inicia la estructura switch en C++
+            koicompiler.cpp += "switch (";
+        }
+        try {
+            <ABRIR_PARENTESIS>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+
+        id = <IDENTIFICADOR>
+        { 
+            // Añade la variable a evaluar en el switch
+            koicompiler.cpp += id.image + ") {\n";
+        }
+
+        try {
+            <CERRAR_PARENTESIS>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+
+        try {
+            <ABRIR_LLAVE>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+
+        (
+            <CASO_SWITCH>
+            num = <NUMERO>
+            <DOS_PUNTOS>
+            { 
+                // Añade el caso en C++
+                koicompiler.cpp += "case " + num.image + ":\n";
+            }
+            (sentencias())*
+            try {
+                <INTERRUPCION>
+            } catch (ParseException e) {
+                koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+            }
+            { 
+                // Añade el break en C++
+                koicompiler.cpp += "break;\n";
+            }
+            try {
+                <DELIMITADOR>
+            } catch (ParseException e) {
+                koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+            }
+        )*
+
+        [
+            <CASO_POR_DEFECTO>
+            <DOS_PUNTOS>
+            { 
+                // Añade el caso default en C++
+                koicompiler.cpp += "default:\n";
+            }
+            (sentencias())*
+        ]
+
+        try {
+            <CERRAR_LLAVE>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        { 
+            // Cierra el bloque switch
+            koicompiler.cpp += "}\n";
+        }
+    } catch (ParseException e) {
+        koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+    }
+}
+
+void cicloWhile() : {} {
+    try {
+        <CICLO_WHILE>
+        { 
+            // Inicia la estructura while en C++
+            koicompiler.cpp += "while (";
+        }
+        try {
+            <ABRIR_PARENTESIS>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+
+        // Condición del while
+        condicion()
+
+        try {
+            <CERRAR_PARENTESIS>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        { 
+            // Cierra la condición y abre el bloque
+            koicompiler.cpp += ") {\n";
+        }
+        try {
+            <ABRIR_LLAVE>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+
+        (sentencias())*
+
+        try {
+            <CERRAR_LLAVE>
+        } catch (ParseException e) {
+            koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+        }
+        { 
+            // Cierra el bloque while
+            koicompiler.cpp += "}\n";
+        }
+    } catch (ParseException e) {
+        koicompiler.tabla.add("Error de Sintaxis -> " + e.getMessage());
+    }
+}
+
+
+void decFunc():{} {
+    try {
+        try {
+            <OP_FUNC>
+        } catch (Exception e) {
+            tabla.add("Error de Sintaxis en OP_FUNC -> " + e.getMessage());
+        }
+
+        try {
+            modiAcc()
+        } catch (Exception e) {
+            tabla.add("Error de Sintaxis en modiAcc -> " + e.getMessage());
+        }
+
+        try {
+            <ESTATICO>
+        } catch (Exception e) {
+            tabla.add("Error de Sintaxis en ESTATICO -> " + e.getMessage());
+        }
+
+        try {
+            [<VACIO>]
+        } catch (Exception e) {
+            tabla.add("Error de Sintaxis en VACIO -> " + e.getMessage());
+        }
+
+        try {
+            <IDENTIFICADOR>
+        } catch (Exception e) {
+            tabla.add("Error de Sintaxis en IDENTIFICADOR -> " + e.getMessage());
+        }
+
+        try {
+            <ABRIR_PARENTESIS>
+        } catch (Exception e) {
+            tabla.add("Error de Sintaxis en ABRIR_PARENTESIS -> " + e.getMessage());
+        }
+
+        try {
+            <CERRAR_PARENTESIS>
+        } catch (Exception e) {
+            tabla.add("Error de Sintaxis en CERRAR_PARENTESIS -> " + e.getMessage());
+        }
+
+        try {
+            <ABRIR_LLAVE>
+        } catch (Exception e) {
+            tabla.add("Error de Sintaxis en ABRIR_LLAVE -> " + e.getMessage());
+        }
+
+        try {
+            (sentencias())*
+        } catch (Exception e) {
+            tabla.add("Error de Sintaxis en sentencias -> " + e.getMessage());
+        }
+
+        try {
+            <CERRAR_LLAVE>
+        } catch (Exception e) {
+            tabla.add("Error de Sintaxis en CERRAR_LLAVE -> " + e.getMessage());
+        }
+    } catch (Exception e) {
+        Token t;
+        do {
+            t = getNextToken();
+        } while (t.kind != DELIMITADOR);
+
+        tabla.add("Error de Sintaxis -> " + e.getMessage());
+    }
+}
+
+
+void modiAcc():{}{
+    try {
+        (<MODI_ACC_PRIVADO> |<MODI_ACC_PROTEGIDO> |<MODI_ACC_PUBLIC> )
+    } catch (ParseException e) {
+        Token t;
+        do {
+            t = getNextToken();
+        } while (t.kind != DELIMITADOR);
+        tabla.add("Error de Sintaxis -> " + e.getMessage());
+    }
+}

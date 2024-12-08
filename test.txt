@@ -4,20 +4,35 @@ INICIAR {
     Decimal c = 3.14;
     boolean d = Verdadero;
     Entero g[2];
-
+    
+    a = 5 + 2;
     Leer (a);
 
     Escribir("El valor de a" + a);
+    Escribir("Esta es una prueba de escritura");
+    
     
     if (a > 10) {
-        Escribir("a es mayor que 10");
+        Escribir("a es mayor que 10, primer if");
     } else {
-        Escribir("a no es mayor que 11");
+        Escribir("a no es mayor que 11, parte else");
     }
 
-   While( c < 10.0){
-	Escribir("PRUEBA WHILE");
-   }
+    if (b!=10){
+        Escribir("b es diferente a 10, primer if");
+    }else if (b!=30){
+        Escribir("b es diferente a 30, segundo if");
+    }else{
+        Escribir("No cumplió con ninguna y se fué al Else");
+    }
 
+    Switch (a){
+        Caso 1:
+            Escribir(" ELDIAVLO 1 ");
+            Break;
+        Caso 2:
+            Escribir( "ELDIAVLO 2 ");
+            Break;
+    }
    
 }

@@ -36,19 +36,3 @@ INICIAR {
 
 }
 
-NoRetorno MiProcedimiento(Entero a, Cadena b) 
-Start
-    Entero z;
-    z = a + 10;
-    Escribir("El valor de c es: " + c);
-    Escribir("El valor de b es: " + b);
-End
-
-
-Publico Entero Sumar(Entero a, Entero b) 
-Start
-    Entero resultado;
-    resultado = a + b;
-    Retorno resultado;
-
-End

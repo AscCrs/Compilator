@@ -1,0 +1,224 @@
+// void funcion() : {
+//     Token id;
+//     String startLabel, endLabel;
+//     ArrayList<Parameter> parameters = new ArrayList<>();
+//     String returnType = "";
+// } {
+//     try {
+//         (<PUBLICO> | <PRIVADO>)
+//         (
+//             <TipoDatoEntero> { returnType = "int"; }
+//             | <TipoDatoDecimal> { returnType = "float"; }
+//             | <TipoDatoCadena> { returnType = "string"; }
+//             | <TIpoDatoCaracter> { returnType = "char"; }
+//         )
+//         id = <IDENTIFICADOR>
+//         <ParentesisAbre>
+//         {
+//             parameters = listaParametros();
+//         }
+//         <ParentesisCierra>
+//         <Start>
+//         {
+//             // Agregar los parámetros a la tabla de variables declaradas
+//             for (Parameter param : parameters) {
+//                 linkers.declaredVariables.put(param.name, param.type);
+//             }
+//         }
+//         (sentencias())*
+//         (retorno(returnType))?
+//         {
+//         }
+//         <End>
+//     } catch (ParseException e) {
+//         Token t;
+//         do {
+//             t = getNextToken();
+//         } while (t.kind != linkersConstants.LlaveCierra && t.kind != EOF);
+//         tabla.add("Error de Sintaxis -> " + e.getMessage());
+//     }
+// }
+
+// void retorno(String returnType) : {
+//     ExpressionResult exprResult;
+// } {
+//     try {
+//         <Retorno>
+//         {
+//             exprResult = expresion(returnType);
+//             if (!exprResult.type.equals(returnType)) {
+//                 tabla.add("Error Semántico -> Tipo de retorno incorrecto. Se esperaba: " + returnType + " pero se obtuvo: " + exprResult.type);
+//             }
+//         }
+//         <DelimitadorLineaDeCodigo>
+//     } catch (ParseException e) {
+//         Token t;
+//         do {
+//             t = getNextToken();
+//         } while (t.kind != DelimitadorLineaDeCodigo && t.kind != EOF);
+//         tabla.add("Error de Sintaxis -> " + e.getMessage());
+//     }
+// }
+
+// ExpressionResult llamadaFuncion() : {
+//     Token id;
+//     ArrayList<ExpressionResult> argumentos = new ArrayList<>();
+//     String funcName;
+//     String returnType = "";
+// } {
+//     try {
+//         <LlamarFuncion>
+//         id = <IDENTIFICADOR>
+//         <ParentesisAbre>
+//         {
+//             funcName = id.image;
+//             if (!linkers.declaredVariables.containsKey(funcName)) {
+//                 linkers.tabla.add("Error Semántico -> Función no declarada: " + funcName + " en línea " + id.beginLine + ", columna " + id.beginColumn);
+//             } else {
+//                 returnType = linkers.declaredVariables.get(funcName);
+//             }
+//         }  
+//         (argumentos = listaArgumentos())
+//     <ParentesisCierra>
+//     {
+//         return new ExpressionResult(returnType);
+//     }
+//     <DelimitadorLineaDeCodigo>
+//     } catch (ParseException e) {
+//         Token t;
+//         do {
+//             t = getNextToken();
+//         } while (t.kind != DelimitadorLineaDeCodigo && t.kind != EOF);
+//         tabla.add("Error de Sintaxis -> " + e.getMessage());
+//     }
+// }
+// void procedimiento() : {
+//     Token id;
+//     String startLabel, endLabel;
+//     ArrayList<Parameter> parameters = new ArrayList<>();
+
+// } {
+//     try {
+//         <NoRetorno>
+//         id = <IDENTIFICADOR>
+//         <ParentesisAbre>
+//         {
+//             parameters = listaParametros();
+//         }
+//         <ParentesisCierra>
+//         <Start>
+//         {
+//             // Agregar los parámetros a la tabla de variables declaradas
+//             for (Parameter param : parameters) {
+//                 linkers.declaredVariables.put(param.name, param.type);
+//             }
+//         }
+//         (sentencias())+
+//         {
+//         }
+//         <End>
+//     } catch (ParseException e) {
+//         Token t;
+//         do {
+//             t = getNextToken();
+//         } while (t.kind != linkersConstants.LlaveCierra && t.kind != EOF);
+//         tabla.add("Error de Sintaxis -> " + e.getMessage());
+//     }
+// }
+
+// ArrayList<Parameter> listaParametros() : {
+//     ArrayList<Parameter> parameters = new ArrayList<>();
+//     Parameter param;
+// } {
+//     (
+//         param = parametro()
+//         {
+//             parameters.add(param);
+//         }
+//         (
+//             <Coma>
+//             param = parametro()
+//             {
+//                 parameters.add(param);
+//             }
+//         )*
+//     )?
+//     { return parameters; }
+// }
+
+// Parameter parametro() : {
+//     Token id;
+//     String type;
+// } {
+//     (
+//         <TipoDatoEntero> { type = "int"; }
+//         | <TipoDatoDecimal> { type = "float"; }
+//         | <TipoDatoBooleano> { type = "boolean"; }
+//         | <TipoDatoCadena> { type = "string"; }
+//         | <TIpoDatoCaracter> { type = "char"; }
+//     )
+//     id = <IDENTIFICADOR>
+    
+//     { return new Parameter(id.image, type); }
+// }
+// ArrayList<ExpressionResult> listaArgumentos() : {
+//     ArrayList<ExpressionResult> argumentos = new ArrayList<>();
+//     ExpressionResult arg;
+// } {
+//         arg = expresion("any")
+//         {
+//             argumentos.add(arg);
+//         }
+//         (
+//             <Coma>
+//             arg = expresion("any")
+//             {
+//                 argumentos.add(arg);
+//             }
+//         )*
+
+//     { return argumentos; }
+// }
+// ExpressionResult concatenar() : {
+//     ExpressionResult left, right;
+//     String temp;
+//     Token token = null;
+// } {
+//     left = expresion("string")// Empezamos con una expresión inicial, esperando tipo cadena
+//     (
+//         {if (nextTokenIsOperadorAritmetico() && getToken(1).image.equals("+")) { // Concatenación con operador "+"
+//         jj_consume_token(linkersConstants.OperacionSuma); // Consumimos el "+" operador
+
+//         // Evaluamos el siguiente valor en la concatenación
+//         right = expresion("string");
+
+//         // Si los tipos no son compatibles, convertimos a cadena
+//         if (!left.type.equals("string")) {
+//             left = new ExpressionResult("string", token.image);
+//         }
+//         if (!right.type.equals("string")) {
+//             right = new ExpressionResult("string", token.image);
+//         }
+
+//         left = new ExpressionResult("string", token.image);
+//         }}
+//     )    
+//     { return left; }
+// }
+
+// String operacionParentesis(String expectedType) : {
+//     ExpressionResult res=null;
+// } {
+//     try {
+//         {jj_consume_token(linkersConstants.ParentesisAbre);
+//         res = expresion(expectedType);
+//         jj_consume_token(linkersConstants.ParentesisCierra);
+
+//         if (!res.type.equals(expectedType)) {
+//             tabla.add("Error Semántico -> Tipo incorrecto en la operación entre paréntesis. Se esperaba: " + expectedType + " pero se obtuvo: " + res.type);
+//         }}
+//     } catch (ParseException e) {
+//         tabla.add("Error de Sintaxis -> " + e.getMessage());
+//     }
+//     {return res;}
+// }

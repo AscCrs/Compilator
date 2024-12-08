@@ -1,0 +1,41 @@
+// Realizar un programa que lea n numero de calificaciones. 
+// De las calificaciones se diran cuales son aprobatorias y cuales son reprobatorias. 
+// El rango de calificaciones va a ser de 0 a 100.
+// Si la calificacion esta entre 60 y 69.9 se va a redondear a 70. 
+// Se obtiene un promedio de las calificaciones e imprimir 5 veces un informe
+// Si las calififaciones son aprobatorias, reprobatorias, las aproximaciones y los  promedios
+INICIAR {
+    Entero n = 0;
+    Entero i = 1;
+    Decimal calif = 0.0;
+    Decimal promedio = 0.0;
+    Entero informe = 5;
+    Entero j = 0;
+    Escribir("Ingresa la cantidad calificaciones a leer: ");
+    Leer(n);
+
+    While (i <= n) {
+        Escribir("Ingresa la calificación " + i + " : ");
+        Leer(calif);
+        if (calif > 60.0 & calif < 69.9) {
+            calif = 70.0;
+            Escribir("Calificación redondeada a: " + calif);
+        }
+        promedio = promedio + calif;
+        
+        if (calif >= 70) {
+            Escribir("Calificación aprobatoria con: " + calif);
+        } else {
+            Escribir("Calificación reprobatoria con: " + calif);
+        }
+
+        i = i + 1;
+    }
+
+    promedio = promedio / n;
+    
+    While (j < informe) {
+        Escribir("Promedio de Calificaciones: " + promedio);
+        j = j + 1;
+    }
+}
